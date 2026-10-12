@@ -48,6 +48,7 @@ import coil.compose.AsyncImage
 import com.example.data.local.WatchHistoryEntity
 import com.example.model.MediaItem
 import com.example.model.StreamSource
+import com.example.ui.home.MediaPosterPlaceholder
 import com.example.ui.theme.StreamDarkBackground
 import com.example.ui.theme.StreamDarkBorder
 import com.example.ui.theme.StreamDarkSurface
@@ -84,12 +85,19 @@ fun MediaDetailSheet(
                     .fillMaxWidth()
                     .height(240.dp)
             ) {
-                AsyncImage(
-                    model = mediaItem.backdropUrl,
-                    contentDescription = mediaItem.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
-                )
+                if (!mediaItem.backdropUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = mediaItem.backdropUrl,
+                        contentDescription = mediaItem.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize()
+                    )
+                } else {
+                    MediaPosterPlaceholder(
+                        title = mediaItem.title,
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
 
                 // Scrim overlay
                 Box(
@@ -130,56 +138,64 @@ fun MediaDetailSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = StreamGold.copy(alpha = 0.2f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, StreamGold)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    if (mediaItem.rating != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StreamGold.copy(alpha = 0.2f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, StreamGold)
                         ) {
-                            Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "%.1f".format(mediaItem.rating), color = StreamGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "%.1f".format(mediaItem.rating), color = StreamGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = StreamDarkSurfaceVariant
-                    ) {
-                        Text(
-                            text = mediaItem.category,
-                            color = StreamPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                    if (mediaItem.category.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StreamDarkSurfaceVariant
+                        ) {
+                            Text(
+                                text = mediaItem.category,
+                                color = StreamPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = StreamDarkSurfaceVariant
-                    ) {
-                        Text(
-                            text = mediaItem.releaseYear,
-                            color = StreamTextSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+                    if (!mediaItem.releaseYear.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StreamDarkSurfaceVariant
+                        ) {
+                            Text(
+                                text = mediaItem.releaseYear,
+                                color = StreamTextSecondary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = StreamDarkSurfaceVariant
-                    ) {
-                        Text(
-                            text = mediaItem.durationText,
-                            color = StreamTextSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+                    if (mediaItem.durationText.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StreamDarkSurfaceVariant
+                        ) {
+                            Text(
+                                text = mediaItem.durationText,
+                                color = StreamTextSecondary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -199,12 +215,14 @@ fun MediaDetailSheet(
                     modifier = Modifier.testTag("detail_title_text")
                 )
 
-                Text(
-                    text = "Source: ${mediaItem.sourceRepo}",
-                    color = StreamTextSecondary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                )
+                if (mediaItem.sourceRepo.isNotBlank()) {
+                    Text(
+                        text = "Source: ${mediaItem.sourceRepo}",
+                        color = StreamTextSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                    )
+                }
 
                 // Resume Bar if watch history exists
                 if (watchHistory != null && watchHistory.lastPositionMs > 1000) {
@@ -328,20 +346,23 @@ fun MediaDetailSheet(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Synopsis
-                Text(
-                    text = "Storyline",
-                    color = StreamTextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = mediaItem.description,
-                    color = StreamTextSecondary,
-                    fontSize = 14.sp,
-                    lineHeight = 22.sp
-                )
+                // Description / Stream Info (hanya tampil jika tidak kosong)
+                if (mediaItem.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Stream Details",
+                        color = StreamTextPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = mediaItem.description,
+                        color = StreamTextSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 

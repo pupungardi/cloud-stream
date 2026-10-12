@@ -292,146 +292,15 @@ fun SourcesScreen(
             }
         }
 
-        // Quick Preset Channels
-        item {
-            Column(modifier = Modifier.padding(bottom = 20.dp)) {
-                Text(
-                    text = "Quick Stream Presets",
-                    color = StreamTextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
-
-                val presets = listOf(
-                    Triple("Apple HLS BipBop Test", "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8", "HLS"),
-                    Triple("Unified Streaming Demo", "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8", "HLS"),
-                    Triple("Mux Adaptive CDN Feed", "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", "HLS")
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    presets.forEach { (name, url, type) ->
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = StreamDarkSurface,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(
-                                    text = name,
-                                    color = StreamTextPrimary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = type,
-                                    color = StreamPrimary,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
-                                )
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.addCustomSource(name, url, type)
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Icon(Icons.Default.CloudDownload, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(12.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("+ Import", color = StreamPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Active Repositories List
+        // Active Sources List
         item {
             Text(
-                text = "Active Catalog Repositories (${customSources.size + 1})",
+                text = "Active Catalog Sources (${customSources.size})",
                 color = StreamTextPrimary,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
-        }
-
-        // Built-in Default Repository
-        item {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, StreamPrimary.copy(alpha = 0.4f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(StreamPrimary.copy(alpha = 0.15f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Stream, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Curated Open Media Hub",
-                                color = StreamTextPrimary,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = StreamPrimary.copy(alpha = 0.2f)
-                            ) {
-                                Text(
-                                    text = "OFFICIAL",
-                                    color = StreamPrimary,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Blender Open Movies, Sintel, Tears of Steel, Wild Horizons",
-                            color = StreamTextSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0x3322C55E)
-                    ) {
-                        Text(
-                            text = "Active",
-                            color = Color(0xFF22C55E),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
         }
 
         // Custom Sources List
@@ -454,7 +323,7 @@ fun SourcesScreen(
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "Use the form above or pick a quick preset to add custom feeds",
+                            text = "Use the form above to add your custom streaming feeds or URLs",
                             color = StreamTextSecondary,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 4.dp)

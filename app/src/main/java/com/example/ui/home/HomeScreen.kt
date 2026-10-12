@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,7 +94,14 @@ fun HomeScreen(
 
     val featuredItems = rawItems.take(5)
 
-    val categories = listOf("All", "Action", "Crime", "Animation", "Sci-Fi", "Documentary", "Space & Live", "Custom Stream")
+    val categories = remember(rawItems) {
+        val distinctCats = rawItems.map { it.category }.filter { it.isNotBlank() }.distinct()
+        listOf("All") + distinctCats
+    }
+
+    val groupedCategories = remember(rawItems) {
+        rawItems.groupBy { it.category }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -211,20 +219,36 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "No streams match your filter",
-                            color = StreamTextSecondary,
-                            fontSize = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                viewModel.onSearchQueryChange("")
-                                viewModel.onSelectCategory("All")
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant)
-                        ) {
-                            Text("Reset Filters", color = StreamPrimary)
+                        if (rawItems.isEmpty()) {
+                            Text(
+                                text = "No stream sources added",
+                                color = StreamTextPrimary,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Import your streaming feeds or URLs in the Sources tab to start watching.",
+                                color = StreamTextSecondary,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "No streams match your filter",
+                                color = StreamTextSecondary,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    viewModel.onSearchQueryChange("")
+                                    viewModel.onSelectCategory("All")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant)
+                            ) {
+                                Text("Reset Filters", color = StreamPrimary)
+                            }
                         }
                     }
                 }
@@ -258,65 +282,17 @@ fun HomeScreen(
                 }
             }
         } else {
-            // Default Categorized Swimlanes
-            val actionItems = rawItems.filter { it.category == "Action" || it.category == "Crime" }
-            val animationItems = rawItems.filter { it.category == "Animation" }
-            val sciFiItems = rawItems.filter { it.category == "Sci-Fi" }
-            val docItems = rawItems.filter { it.category == "Documentary" || it.category == "Space & Live" }
-            val customItems = rawItems.filter { it.category == "Custom Stream" }
-
-            if (actionItems.isNotEmpty()) {
-                item {
-                    MediaSwimlane(
-                        title = "Featured Action & Crime",
-                        subtitle = "Trending blockbuster releases",
-                        items = actionItems,
-                        onOpenMedia = onOpenMedia
-                    )
-                }
-            }
-
-            if (animationItems.isNotEmpty()) {
-                item {
-                    MediaSwimlane(
-                        title = "Animation & Shorts",
-                        subtitle = "Open source animated masterworks",
-                        items = animationItems,
-                        onOpenMedia = onOpenMedia
-                    )
-                }
-            }
-
-            if (sciFiItems.isNotEmpty()) {
-                item {
-                    MediaSwimlane(
-                        title = "Sci-Fi & Cyberpunk",
-                        subtitle = "High concept futuristic adventures",
-                        items = sciFiItems,
-                        onOpenMedia = onOpenMedia
-                    )
-                }
-            }
-
-            if (docItems.isNotEmpty()) {
-                item {
-                    MediaSwimlane(
-                        title = "Nature & Live Feeds",
-                        subtitle = "Panoramic vistas and live test channels",
-                        items = docItems,
-                        onOpenMedia = onOpenMedia
-                    )
-                }
-            }
-
-            if (customItems.isNotEmpty()) {
-                item {
-                    MediaSwimlane(
-                        title = "Imported Custom Streams",
-                        subtitle = "Loaded from user-added repositories",
-                        items = customItems,
-                        onOpenMedia = onOpenMedia
-                    )
+            // Dynamic Categorized Swimlanes
+            groupedCategories.forEach { (categoryName, itemsInCategory) ->
+                if (itemsInCategory.isNotEmpty()) {
+                    item {
+                        MediaSwimlane(
+                            title = categoryName,
+                            subtitle = "${itemsInCategory.size} ${if (itemsInCategory.size == 1) "stream" else "streams"}",
+                            items = itemsInCategory,
+                            onOpenMedia = onOpenMedia
+                        )
+                    }
                 }
             }
         }
@@ -418,12 +394,16 @@ fun HeroCard(
             .testTag("hero_card_${mediaItem.id}")
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = mediaItem.backdropUrl,
-                contentDescription = mediaItem.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            if (!mediaItem.backdropUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = mediaItem.backdropUrl,
+                    contentDescription = mediaItem.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                MediaPosterPlaceholder(title = mediaItem.title, modifier = Modifier.fillMaxSize())
+            }
 
             // Gradien bawah sinematik agar Logo Text sangat kontras dan terbaca jelas
             Box(
@@ -492,7 +472,7 @@ fun HeroCard(
 }
 
 /**
- * Render Logo Text khusus sesuai gaya film (Spider-Man, Unabomber, Sintel, Tears of Steel, dll.)
+ * Render Logo Text bergaya sinematik untuk judul media.
  */
 @Composable
 fun HeroLogoText(
@@ -503,157 +483,30 @@ fun HeroLogoText(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        when (mediaItem.logoStyle) {
-            "SPIDERMAN" -> {
-                // SPIDER-MAN: Comic red bold dengan shadow hitam pekat,
-                // dan BRAND NEW DAY warna kuning cerah di bawahnya persis gambar referensi
-                Text(
-                    text = "SPIDER-MAN",
-                    color = Color(0xFFDC2626),
-                    fontSize = 25.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black,
-                            offset = Offset(2f, 3f),
-                            blurRadius = 4f
-                        )
-                    )
+        Text(
+            text = mediaItem.title.uppercase(),
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.5.sp,
+            textAlign = TextAlign.Center,
+            style = TextStyle(
+                shadow = Shadow(
+                    color = Color.Black,
+                    offset = Offset(1f, 2f),
+                    blurRadius = 6f
                 )
-                Text(
-                    text = mediaItem.logoSubtitle ?: "BRAND NEW DAY",
-                    color = Color(0xFFFACC15),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 2.5.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black,
-                            offset = Offset(1f, 2f),
-                            blurRadius = 3f
-                        )
-                    ),
-                    modifier = Modifier.padding(top = 1.dp)
-                )
-            }
-
-            "UNABOMBER" -> {
-                // UNABOMBER: Serif modern putih bersih dengan spasi antar huruf renggang
-                Text(
-                    text = "U N A B O M B E R",
-                    color = Color(0xFFF8FAFC),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 5.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.9f),
-                            offset = Offset(0f, 2f),
-                            blurRadius = 8f
-                        )
-                    )
-                )
-            }
-
-            "SINTEL" -> {
-                Text(
-                    text = "S I N T E L",
-                    color = Color(0xFFE0F2FE),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 6.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = StreamPrimary,
-                            offset = Offset(0f, 0f),
-                            blurRadius = 10f
-                        )
-                    )
-                )
-                if (mediaItem.logoSubtitle != null) {
-                    Text(
-                        text = mediaItem.logoSubtitle,
-                        color = StreamGold,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 3.sp,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-            }
-
-            "CYBERPUNK" -> {
-                Text(
-                    text = "TEARS OF STEEL",
-                    color = Color(0xFF38BDF8),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 3.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color(0xFF818CF8),
-                            offset = Offset(0f, 0f),
-                            blurRadius = 8f
-                        )
-                    )
-                )
-                if (mediaItem.logoSubtitle != null) {
-                    Text(
-                        text = mediaItem.logoSubtitle,
-                        color = Color(0xFFCBD5E1),
-                        fontSize = 10.sp,
-                        letterSpacing = 3.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            "COMIC" -> {
-                Text(
-                    text = "BIG BUCK BUNNY",
-                    color = Color(0xFFFBBF24),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.5.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color(0xFF78350F),
-                            offset = Offset(2f, 3f),
-                            blurRadius = 5f
-                        )
-                    )
-                )
-            }
-
-            else -> {
-                // Tampilan logo teks default berkualitas tinggi untuk judul lainnya
-                Text(
-                    text = mediaItem.title.uppercase(),
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 3.sp,
-                    textAlign = TextAlign.Center,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black,
-                            offset = Offset(1f, 2f),
-                            blurRadius = 6f
-                        )
-                    )
-                )
-                if (mediaItem.category.isNotBlank()) {
-                    Text(
-                        text = mediaItem.category.uppercase(),
-                        color = StreamPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
-                }
-            }
+            )
+        )
+        if (mediaItem.category.isNotBlank()) {
+            Text(
+                text = mediaItem.category.uppercase(),
+                color = StreamPrimary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }
@@ -711,12 +564,16 @@ fun ContinueWatchingSection(
                                 .fillMaxWidth()
                                 .height(115.dp)
                         ) {
-                            AsyncImage(
-                                model = item.posterUrl,
-                                contentDescription = item.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            if (!item.posterUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = item.posterUrl,
+                                    contentDescription = item.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                MediaPosterPlaceholder(title = item.title, modifier = Modifier.fillMaxSize())
+                            }
 
                             // Quick Play overlay
                             Box(
@@ -832,12 +689,16 @@ fun MediaCard(
                     .fillMaxWidth()
                     .height(180.dp)
             ) {
-                AsyncImage(
-                    model = mediaItem.posterUrl,
-                    contentDescription = mediaItem.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                if (!mediaItem.posterUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = mediaItem.posterUrl,
+                        contentDescription = mediaItem.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    MediaPosterPlaceholder(title = mediaItem.title, modifier = Modifier.fillMaxSize())
+                }
 
                 // Quality or Live Badge
                 Surface(
@@ -856,21 +717,23 @@ fun MediaCard(
                     )
                 }
 
-                // Rating Badge
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xCC000000),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // Rating Badge (hanya tampil jika rating tidak null)
+                if (mediaItem.rating != null) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xCC000000),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
                     ) {
-                        Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(10.dp))
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(text = "%.1f".format(mediaItem.rating), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(10.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(text = "%.1f".format(mediaItem.rating), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -894,12 +757,58 @@ fun MediaCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
-                    Text(
-                        text = mediaItem.releaseYear,
-                        color = StreamTextSecondary,
-                        fontSize = 11.sp
-                    )
+                    if (!mediaItem.releaseYear.isNullOrBlank()) {
+                        Text(
+                            text = mediaItem.releaseYear,
+                            color = StreamTextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Placeholder lokal elegan berbasis gradien dan inisial/ikon ketika URL poster bernilai null.
+ */
+@Composable
+fun MediaPosterPlaceholder(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        StreamDarkSurfaceVariant,
+                        StreamDarkSurface
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = StreamPrimary.copy(alpha = 0.7f),
+                modifier = Modifier.size(32.dp)
+            )
+            if (title.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = title.take(2).uppercase(),
+                    color = StreamTextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

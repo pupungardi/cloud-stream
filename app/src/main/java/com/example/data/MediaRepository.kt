@@ -26,30 +26,32 @@ class MediaRepository(private val database: AppDatabase) {
     val customSources: Flow<List<CustomSourceEntity>> = customSourceDao.getAllSources()
 
     fun getAllMediaItems(): Flow<List<MediaItem>> {
-        // Hanya listen perubahan customSources (jangan combine dengan watchHistory)
+        // Katalog HANYA berasal dari custom source yang isEnabled di database.
+        // Tidak ada daftar bawaan, tidak ada seed saat first launch.
         return customSources.map { sources ->
-            val allList = CuratedMediaCatalog.items.toMutableList()
+            val allList = mutableListOf<MediaItem>()
 
-            // Konversi custom source yang aktif menjadi MediaItem
             sources.filter { it.isEnabled }.forEach { source ->
                 val sourceId = "custom-${source.id}"
                 val isHls = isHlsUrl(source.url)
+                val categoryName = if (isHls) "HLS Stream" else "Direct Video"
+
                 allList.add(
                     MediaItem(
                         id = sourceId,
                         title = source.name,
-                        description = "Imported custom stream from repository source: ${source.url}",
-                        category = if (isHls) "Space & Live" else "Custom Stream",
-                        posterUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80",
-                        backdropUrl = "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&auto=format&fit=crop&q=80",
+                        description = source.url, // Hanya tampilkan URL sumber atau kosongkan
+                        category = categoryName,
+                        posterUrl = null, // Tidak memakai poster Unsplash palsu
+                        backdropUrl = null,
                         durationText = if (isHls) "LIVE" else "Stream",
                         durationMs = 0L,
-                        releaseYear = "Custom",
-                        rating = 9.0f,
+                        releaseYear = null, // Tidak memakai nilai palsu "Custom"
+                        rating = null,      // Tidak memakai nilai palsu 9.0f
                         isLive = isHls,
                         streamSources = listOf(
                             StreamSource(
-                                label = if (isHls) "HLS Live Stream" else "Direct Video Feed",
+                                label = if (isHls) "HLS Live Stream" else "Direct Stream",
                                 url = source.url,
                                 quality = "Auto"
                             )
@@ -118,10 +120,10 @@ class MediaRepository(private val database: AppDatabase) {
                 mediaId = mediaItem.id,
                 title = mediaItem.title,
                 category = mediaItem.category,
-                posterUrl = mediaItem.posterUrl,
+                posterUrl = mediaItem.posterUrl ?: "",
                 streamUrl = mediaItem.streamSources.firstOrNull()?.url ?: "",
                 durationText = mediaItem.durationText,
-                rating = mediaItem.rating,
+                rating = mediaItem.rating ?: 0f,
                 addedAt = System.currentTimeMillis()
             )
             bookmarkDao.insertBookmark(entity)

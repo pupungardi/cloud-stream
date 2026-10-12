@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.MediaItem
+import com.example.ui.home.MediaPosterPlaceholder
 import com.example.ui.theme.StreamDarkBackground
 import com.example.ui.theme.StreamDarkBorder
 import com.example.ui.theme.StreamDarkSurface
@@ -252,14 +253,23 @@ fun LibraryScreen(
                                 modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AsyncImage(
-                                    model = b.posterUrl,
-                                    contentDescription = b.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
+                                if (!b.posterUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = b.posterUrl,
+                                        contentDescription = b.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                    )
+                                } else {
+                                    MediaPosterPlaceholder(
+                                        title = b.title,
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                    )
+                                }
 
                                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -289,10 +299,12 @@ fun LibraryScreen(
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text(text = "%.1f".format(b.rating), color = StreamGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        if (b.rating > 0f) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text(text = "%.1f".format(b.rating), color = StreamGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                     Text(
@@ -395,14 +407,23 @@ fun LibraryScreen(
                                     modifier = Modifier.padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    AsyncImage(
-                                        model = h.posterUrl,
-                                        contentDescription = h.title,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(70.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    )
+                                    if (!h.posterUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = h.posterUrl,
+                                            contentDescription = h.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(70.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                    } else {
+                                        MediaPosterPlaceholder(
+                                            title = h.title,
+                                            modifier = Modifier
+                                                .size(70.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                    }
 
                                     Spacer(modifier = Modifier.width(12.dp))
 

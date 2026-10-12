@@ -231,7 +231,7 @@ class PlayerViewModel(private val repository: MediaRepository) : ViewModel() {
                 repository.saveWatchProgress(
                     mediaId = media.id,
                     title = media.title,
-                    posterUrl = media.posterUrl,
+                    posterUrl = media.posterUrl ?: "",
                     streamUrl = currentSource,
                     lastPositionMs = state.currentPositionMs,
                     durationMs = state.durationMs,

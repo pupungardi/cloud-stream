@@ -23,18 +23,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.example.ui.profile.ProfileSettingsScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,7 +71,7 @@ enum class MainTab(val title: String) {
     DISCOVER("Discover"),
     SEARCH("Search"),
     LIBRARY("Library"),
-    SOURCES("Sources")
+    PROFILE("Profile")
 }
 
 @androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,7 +104,7 @@ fun MainScreen(
 
     Scaffold(
         bottomBar = {
-            // Apple Glass Floating Frosted Glass Navigation Bar Dock (4 Tabs: Discover, Search, Library, Sources)
+            // Apple Glass Floating Frosted Glass Navigation Bar Dock (4 Tabs: Discover, Search, Library, Profile)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -146,7 +147,7 @@ fun MainScreen(
                                 MainTab.DISCOVER -> if (isSelected) Icons.Filled.Home else Icons.Outlined.Home
                                 MainTab.SEARCH -> if (isSelected) Icons.Filled.Search else Icons.Outlined.Search
                                 MainTab.LIBRARY -> if (isSelected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
-                                MainTab.SOURCES -> if (isSelected) Icons.Filled.CloudDownload else Icons.Outlined.CloudDownload
+                                MainTab.PROFILE -> if (isSelected) Icons.Filled.Person else Icons.Outlined.Person
                             }
 
                             Box(
@@ -242,8 +243,8 @@ fun MainScreen(
                             }
                         )
                     }
-                    MainTab.SOURCES -> {
-                        SourcesScreen(
+                    MainTab.PROFILE -> {
+                        ProfileSettingsScreen(
                             viewModel = catalogViewModel
                         )
                     }

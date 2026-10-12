@@ -8,6 +8,51 @@ object CuratedMediaCatalog {
 
     val items: List<MediaItem> = listOf(
         MediaItem(
+            id = "cs-spiderman",
+            title = "Spider-Man",
+            description = "Swinging through the towering skyscrapers of Manhattan, Spider-Man faces dangerous new adversaries in an adrenaline-fueled urban action adventure.",
+            category = "Action",
+            posterUrl = "https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?w=600&auto=format&fit=crop&q=80",
+            backdropUrl = "https://images.unsplash.com/photo-1635805737707-575885ab0820?w=1200&auto=format&fit=crop&q=80",
+            durationText = "18 min",
+            durationMs = 1080000L,
+            releaseYear = "2025",
+            rating = 9.3f,
+            streamSources = listOf(
+                StreamSource(
+                    label = "Direct HD Feed",
+                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                    quality = "Auto"
+                )
+            ),
+            sourceRepo = "Marvel Fan Showcase",
+            logoStyle = "SPIDERMAN",
+            logoSubtitle = "BRAND NEW DAY"
+        ),
+
+        MediaItem(
+            id = "cs-unabomber",
+            title = "Unabomber",
+            description = "A chilling psychological investigation into the FBI's high-stakes manhunt for the elusive Unabomber, detailing the intense interrogation and linguistic code-breaking.",
+            category = "Crime",
+            posterUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80",
+            backdropUrl = "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=1200&auto=format&fit=crop&q=80",
+            durationText = "22 min",
+            durationMs = 1320000L,
+            releaseYear = "2024",
+            rating = 9.0f,
+            streamSources = listOf(
+                StreamSource(
+                    label = "Direct HD Feed",
+                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    quality = "Auto"
+                )
+            ),
+            sourceRepo = "Crime & Mystery Archives",
+            logoStyle = "UNABOMBER"
+        ),
+
+        MediaItem(
             id = "cs-sintel",
             title = "Sintel",
             description = "A lonely young woman, Sintel, helps and bonds with an orphaned baby dragon she names Scales. But when a full-grown dragon snatches Scales away, Sintel embarks on an epic, heart-wrenching quest across treacherous mountain peaks and desolate ruins to rescue her beloved companion.",
@@ -18,6 +63,8 @@ object CuratedMediaCatalog {
             durationMs = 918000L,
             releaseYear = "2010",
             rating = 8.6f,
+            logoStyle = "SINTEL",
+            logoSubtitle = "THE DRAGON QUEST",
             streamSources = listOf(
                 StreamSource(
                     label = "Direct MP4 Feed",
@@ -79,6 +126,8 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             durationMs = 734000L,
             releaseYear = "2012",
             rating = 8.4f,
+            logoStyle = "CYBERPUNK",
+            logoSubtitle = "AMSTERDAM 2024",
             streamSources = listOf(
                 StreamSource(
                     label = "Adaptive HLS Stream",
@@ -124,6 +173,7 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             durationMs = 596000L,
             releaseYear = "2008",
             rating = 8.8f,
+            logoStyle = "COMIC",
             streamSources = listOf(
                 StreamSource(
                     label = "Adaptive HLS Stream",

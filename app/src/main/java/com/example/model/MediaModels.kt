@@ -14,7 +14,9 @@ data class MediaItem(
     val streamSources: List<StreamSource>,
     val subtitles: List<SubtitleTrack> = emptyList(),
     val sourceRepo: String = "Curated Open Media",
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val logoStyle: String? = null,
+    val logoSubtitle: String? = null
 )
 
 data class StreamSource(

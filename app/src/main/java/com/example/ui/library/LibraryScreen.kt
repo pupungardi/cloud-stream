@@ -77,6 +77,7 @@ import java.util.Locale
 fun LibraryScreen(
     viewModel: CatalogViewModel,
     onOpenMedia: (MediaItem) -> Unit,
+    onQuickPlay: (MediaItem, com.example.model.StreamSource) -> Unit,
     onNavigateDiscover: () -> Unit
 ) {
     val bookmarks by viewModel.bookmarks.collectAsState()
@@ -99,13 +100,13 @@ fun LibraryScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Text(
-                text = "My Library",
+                text = "Library",
                 color = StreamTextPrimary,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Track your favorite streams and viewing history",
+                text = "Your favorite streams and viewing history",
                 color = StreamTextSecondary,
                 fontSize = 13.sp
             )
@@ -119,7 +120,7 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = StreamDarkSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
                 modifier = Modifier.weight(1f)
@@ -145,7 +146,7 @@ fun LibraryScreen(
             }
 
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = StreamDarkSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
                 modifier = Modifier.weight(1f)
@@ -239,7 +240,7 @@ fun LibraryScreen(
                     items(bookmarks) { b ->
                         val matched = allItems.find { it.id == b.mediaId }
                         Card(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
                             border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
                             modifier = Modifier
@@ -259,14 +260,14 @@ fun LibraryScreen(
                                         contentDescription = b.title,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
-                                            .size(72.dp)
+                                            .size(64.dp, 96.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                     )
                                 } else {
                                     MediaPosterPlaceholder(
                                         title = b.title,
                                         modifier = Modifier
-                                            .size(72.dp)
+                                            .size(64.dp, 96.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                     )
                                 }
@@ -314,16 +315,29 @@ fun LibraryScreen(
                                     )
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        matched?.let { viewModel.toggleBookmark(it, true) }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (matched != null && matched.streamSources.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { onQuickPlay(matched, matched.streamSources.first()) },
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(StreamPrimary.copy(alpha = 0.2f), CircleShape)
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = StreamPrimary, modifier = Modifier.size(18.dp))
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
                                     }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = "Remove Bookmark",
-                                        tint = StreamTextSecondary
-                                    )
+                                    IconButton(
+                                        onClick = {
+                                            matched?.let { viewModel.toggleBookmark(it, true) }
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Remove Bookmark",
+                                            tint = StreamTextSecondary
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -392,7 +406,7 @@ fun LibraryScreen(
                         val dateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
 
                         Card(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
                             border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
                             modifier = Modifier
@@ -413,14 +427,14 @@ fun LibraryScreen(
                                             contentDescription = h.title,
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier
-                                                .size(70.dp)
+                                                .size(64.dp, 96.dp)
                                                 .clip(RoundedCornerShape(8.dp))
                                         )
                                     } else {
                                         MediaPosterPlaceholder(
                                             title = h.title,
                                             modifier = Modifier
-                                                .size(70.dp)
+                                                .size(64.dp, 96.dp)
                                                 .clip(RoundedCornerShape(8.dp))
                                         )
                                     }
@@ -450,10 +464,23 @@ fun LibraryScreen(
                                         )
                                     }
 
-                                    IconButton(
-                                        onClick = { viewModel.deleteWatchHistory(h.mediaId) }
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete entry", tint = StreamTextSecondary)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (matched != null && matched.streamSources.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = { onQuickPlay(matched, matched.streamSources.first()) },
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .background(StreamPrimary.copy(alpha = 0.2f), CircleShape)
+                                            ) {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = StreamPrimary, modifier = Modifier.size(18.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.deleteWatchHistory(h.mediaId) }
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete entry", tint = StreamTextSecondary)
+                                        }
                                     }
                                 }
 

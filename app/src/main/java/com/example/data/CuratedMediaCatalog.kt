@@ -20,19 +20,9 @@ object CuratedMediaCatalog {
             rating = 8.6f,
             streamSources = listOf(
                 StreamSource(
-                    label = "1080p FHD (Direct)",
+                    label = "Direct MP4 Feed",
                     url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                    quality = "1080p"
-                ),
-                StreamSource(
-                    label = "720p HD (Fast)",
-                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                    quality = "720p"
-                ),
-                StreamSource(
-                    label = "480p SD (Data Saver)",
-                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                    quality = "480p"
+                    quality = "Auto"
                 )
             ),
             subtitles = listOf(
@@ -91,14 +81,14 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             rating = 8.4f,
             streamSources = listOf(
                 StreamSource(
-                    label = "1080p FHD (Direct)",
-                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                    quality = "1080p"
-                ),
-                StreamSource(
                     label = "Adaptive HLS Stream",
                     url = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
                     quality = "Auto"
+                ),
+                StreamSource(
+                    label = "Direct MP4 Feed",
+                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                    quality = "1080p"
                 )
             ),
             subtitles = listOf(
@@ -126,7 +116,7 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
         MediaItem(
             id = "cs-big-buck-bunny",
             title = "Big Buck Bunny",
-            description = "A cheerful giant forest rabbit wakes up to a sunny morning, delighting in colorful butterflies and blossoms. When a mischievous trio of woodland bullies—Frank the flying squirrel, Rinky, and Gamera—disrupt his peace, Bunny engineers brilliant, comical traps.",
+            description = "A cheerful giant forest rabbit wakes up to a sunny morning, delighting in colorful butterflies and blossoms. When a mischievous trio of woodland bullies disrupt his peace, Bunny engineers brilliant, comical traps.",
             category = "Animation",
             posterUrl = "https://images.unsplash.com/photo-1535083783855-76ae62b2914e?w=600&auto=format&fit=crop&q=80",
             backdropUrl = "https://images.unsplash.com/photo-1470246973918-29a93221c455?w=1200&auto=format&fit=crop&q=80",
@@ -136,19 +126,14 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             rating = 8.8f,
             streamSources = listOf(
                 StreamSource(
-                    label = "1080p FHD (Direct)",
-                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                    quality = "1080p"
-                ),
-                StreamSource(
-                    label = "Adaptive HLS (Mux CDN)",
+                    label = "Adaptive HLS Stream",
                     url = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
                     quality = "Auto"
                 ),
                 StreamSource(
-                    label = "720p HD",
+                    label = "Direct MP4 Feed",
                     url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                    quality = "720p"
+                    quality = "1080p"
                 )
             ),
             subtitles = listOf(
@@ -186,14 +171,9 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             rating = 8.1f,
             streamSources = listOf(
                 StreamSource(
-                    label = "1080p FHD (Direct)",
+                    label = "Direct MP4 Feed",
                     url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                    quality = "1080p"
-                ),
-                StreamSource(
-                    label = "720p HD",
-                    url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                    quality = "720p"
+                    quality = "Auto"
                 )
             ),
             subtitles = listOf(
@@ -228,7 +208,7 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             isLive = true,
             streamSources = listOf(
                 StreamSource(
-                    label = "Adaptive HLS (Live)",
+                    label = "Adaptive HLS Stream",
                     url = "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8",
                     quality = "Auto"
                 )
@@ -249,9 +229,9 @@ Sintel avanzaba guiada únicamente por sus recuerdos.
             rating = 9.0f,
             streamSources = listOf(
                 StreamSource(
-                    label = "1080p FHD (Direct)",
+                    label = "Direct MP4 Feed",
                     url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                    quality = "1080p"
+                    quality = "Auto"
                 )
             ),
             subtitles = listOf(
@@ -285,9 +265,9 @@ Ancient granite peaks withstand centuries of glacial flow.
             rating = 8.7f,
             streamSources = listOf(
                 StreamSource(
-                    label = "1080p FHD (Direct)",
+                    label = "Direct MP4 Feed",
                     url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-                    quality = "1080p"
+                    quality = "Auto"
                 )
             ),
             sourceRepo = "Open Earth Archives"
@@ -295,8 +275,8 @@ Ancient granite peaks withstand centuries of glacial flow.
     )
 
     val samplePresetRepositories = listOf(
-        Pair("Blender Open Cinema Vault", "https://cloudstream.repo.example/blender_open_movies.json"),
-        Pair("Public Domain Classics Hub", "https://cloudstream.repo.example/public_domain_cinema.m3u"),
-        Pair("Open Science & Astronomy HLS", "https://cloudstream.repo.example/open_science_stream.m3u8")
+        Pair("Apple HLS BipBop Test", "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"),
+        Pair("Unified Streaming Tears of Steel", "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"),
+        Pair("Mux Adaptive CDN Feed", "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")
     )
 }

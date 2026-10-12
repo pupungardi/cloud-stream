@@ -8,9 +8,10 @@ import com.example.model.MediaItem
 import com.example.model.StreamSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.util.UUID
 
@@ -25,13 +26,14 @@ class MediaRepository(private val database: AppDatabase) {
     val customSources: Flow<List<CustomSourceEntity>> = customSourceDao.getAllSources()
 
     fun getAllMediaItems(): Flow<List<MediaItem>> {
-        return customSources.combine(watchHistory) { sources, _ ->
+        // Hanya listen perubahan customSources (jangan combine dengan watchHistory)
+        return customSources.map { sources ->
             val allList = CuratedMediaCatalog.items.toMutableList()
 
-            // Convert active custom sources into playable media items
+            // Konversi custom source yang aktif menjadi MediaItem
             sources.filter { it.isEnabled }.forEach { source ->
                 val sourceId = "custom-${source.id}"
-                val isHls = source.url.endsWith(".m3u8", ignoreCase = true)
+                val isHls = isHlsUrl(source.url)
                 allList.add(
                     MediaItem(
                         id = sourceId,
@@ -57,6 +59,16 @@ class MediaRepository(private val database: AppDatabase) {
                 )
             }
             allList
+        }
+    }
+
+    private fun isHlsUrl(rawUrl: String): Boolean {
+        return try {
+            val uri = URI(rawUrl)
+            val path = uri.path ?: ""
+            path.endsWith(".m3u8", ignoreCase = true)
+        } catch (_: Exception) {
+            rawUrl.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
         }
     }
 
@@ -137,29 +149,75 @@ class MediaRepository(private val database: AppDatabase) {
     }
 
     suspend fun testUrlConnectivity(streamUrl: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val url = URL(streamUrl)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "HEAD"
-            connection.connectTimeout = 4000
-            connection.readTimeout = 4000
-            connection.instanceFollowRedirects = true
-            val responseCode = connection.responseCode
-            responseCode in 200..399
-        } catch (_: Exception) {
-            // Some streaming CDNs reject HEAD requests; fallback to GET with short range
+        // Percobaan 1: Menggunakan HEAD request dengan penanganan redirect
+        var currentUrl = streamUrl
+        var redirects = 0
+        while (redirects < 5) {
+            var connection: HttpURLConnection? = null
             try {
-                val url = URL(streamUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("Range", "bytes=0-1024")
-                connection.connectTimeout = 4000
-                connection.readTimeout = 4000
+                val url = URL(currentUrl)
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "HEAD"
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    instanceFollowRedirects = false
+                }
                 val code = connection.responseCode
-                code in 200..399
+                if (code in 200..299 || code == 206) {
+                    return@withContext true
+                } else if (code in 300..399) {
+                    val location = connection.getHeaderField("Location") ?: break
+                    currentUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
+                        location
+                    } else {
+                        URL(url, location).toString()
+                    }
+                    redirects++
+                } else {
+                    break
+                }
             } catch (_: Exception) {
-                false
+                break
+            } finally {
+                connection?.disconnect()
             }
         }
+
+        // Percobaan 2 (Fallback): Beberapa server media menolak HEAD; coba GET dengan byte-range
+        currentUrl = streamUrl
+        redirects = 0
+        while (redirects < 5) {
+            var connection: HttpURLConnection? = null
+            try {
+                val url = URL(currentUrl)
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("Range", "bytes=0-1024")
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    instanceFollowRedirects = false
+                }
+                val code = connection.responseCode
+                if (code in 200..299 || code == 206) {
+                    return@withContext true
+                } else if (code in 300..399) {
+                    val location = connection.getHeaderField("Location") ?: return@withContext false
+                    currentUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
+                        location
+                    } else {
+                        URL(url, location).toString()
+                    }
+                    redirects++
+                } else {
+                    return@withContext false
+                }
+            } catch (_: Exception) {
+                return@withContext false
+            } finally {
+                connection?.disconnect()
+            }
+        }
+
+        false
     }
 }

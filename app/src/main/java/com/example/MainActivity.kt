@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @androidx.compose.material3.ExperimentalMaterial3Api
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

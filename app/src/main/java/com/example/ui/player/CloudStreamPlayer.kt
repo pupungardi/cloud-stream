@@ -1,25 +1,20 @@
 package com.example.ui.player
 
-import android.media.MediaPlayer
-import android.media.PlaybackParams
 import android.net.Uri
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,7 +54,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +73,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.MediaItem as Media3Item
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import com.example.ui.theme.StreamCardOverlay
 import com.example.ui.theme.StreamDarkSurface
 import com.example.ui.theme.StreamPrimary
@@ -86,8 +93,10 @@ import com.example.ui.theme.StreamTextSecondary
 import com.example.ui.viewmodel.AspectRatioMode
 import com.example.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(UnstableApi::class)
+@ExperimentalMaterial3Api
 @Composable
 fun CloudStreamPlayer(
     viewModel: PlayerViewModel,
@@ -95,96 +104,112 @@ fun CloudStreamPlayer(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    var surfaceHolder by remember { mutableStateOf<SurfaceHolder?>(null) }
+    // Inisialisasi DefaultTrackSelector dan satu ExoPlayer per pemutar
+    val trackSelector = remember {
+        DefaultTrackSelector(context)
+    }
+
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context)
+            .setTrackSelector(trackSelector)
+            .build()
+    }
+
     var isSeeking by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableLongStateOf(0L) }
     var doubleTapFlashText by remember { mutableStateOf<String?>(null) }
+    var selectedHlsMaxHeight by remember { mutableIntStateOf(Int.MAX_VALUE) } // Untuk stream adaptif
 
-    // Intercept back button to persist position and close player cleanly
+    // Jalur tunggal untuk seek: langsung eksekusi ke ExoPlayer dan sinkronkan state
+    fun performSeek(targetMs: Long) {
+        val dur = exoPlayer.duration.coerceAtLeast(0L)
+        val maxDur = if (dur > 0) dur else Long.MAX_VALUE
+        val clamped = targetMs.coerceIn(0L, maxDur)
+        exoPlayer.seekTo(clamped)
+        viewModel.onPositionChanged(clamped, if (dur > 0) dur else uiState.durationMs)
+        viewModel.persistWatchProgress()
+        viewModel.resetControlsTimer()
+    }
+
+    fun skipBy(deltaMs: Long) {
+        val current = exoPlayer.currentPosition.coerceAtLeast(0L)
+        performSeek(current + deltaMs)
+    }
+
+    // Lifecycle & cleanup: pause saat ON_PAUSE, lepas player di onDispose
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                exoPlayer.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        val playerListener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                viewModel.onIsPlayingChanged(isPlaying)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val isBuffering = playbackState == Player.STATE_BUFFERING
+                val isEnded = playbackState == Player.STATE_ENDED
+                viewModel.onPlaybackStateChanged(isBuffering, isEnded)
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                viewModel.onError("Playback error: ${error.message ?: error.errorCodeName}")
+            }
+        }
+        exoPlayer.addListener(playerListener)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            exoPlayer.removeListener(playerListener)
+            exoPlayer.release()
+        }
+    }
+
+    // BackHandler: simpan posisi dan tutup layar
     BackHandler {
         viewModel.persistWatchProgress()
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        exoPlayer.stop()
         viewModel.closePlayer()
         onClose()
     }
 
-    // Video engine lifecycle & stream loading
+    // Set media stream saat URL sumber berubah (atau pertama kali dimuat)
     val streamUrl = uiState.currentSource?.url
-    LaunchedEffect(streamUrl, surfaceHolder) {
-        val holder = surfaceHolder ?: return@LaunchedEffect
+    LaunchedEffect(streamUrl) {
         val url = streamUrl ?: return@LaunchedEffect
+        val mediaItem = Media3Item.fromUri(Uri.parse(url))
+        val resumePos = uiState.currentPositionMs
 
-        try {
-            mediaPlayer?.release()
-            val player = MediaPlayer().apply {
-                setDisplay(holder)
-                setDataSource(context, Uri.parse(url))
-                setOnPreparedListener { mp ->
-                    viewModel.onPlaybackStateChanged(isPlaying = true, isBuffering = false)
-                    val duration = mp.duration.toLong()
-                    if (uiState.currentPositionMs > 0 && uiState.currentPositionMs < duration) {
-                        mp.seekTo(uiState.currentPositionMs.toInt())
-                    }
-                    if (uiState.playbackSpeed != 1.0f) {
-                        try {
-                            mp.playbackParams = PlaybackParams().setSpeed(uiState.playbackSpeed)
-                        } catch (_: Exception) {}
-                    }
-                    mp.start()
-                }
-                setOnBufferingUpdateListener { _, _ -> }
-                setOnInfoListener { _, what, _ ->
-                    when (what) {
-                        MediaPlayer.MEDIA_INFO_BUFFERING_START -> viewModel.onPlaybackStateChanged(isPlaying = true, isBuffering = true)
-                        MediaPlayer.MEDIA_INFO_BUFFERING_END -> viewModel.onPlaybackStateChanged(isPlaying = true, isBuffering = false)
-                    }
-                    true
-                }
-                setOnCompletionListener {
-                    viewModel.onPlaybackStateChanged(isPlaying = false, isBuffering = false)
-                }
-                setOnErrorListener { _, what, extra ->
-                    viewModel.onError("Playback error ($what, $extra). Try another source.")
-                    true
-                }
-                prepareAsync()
-            }
-            mediaPlayer = player
-        } catch (e: Exception) {
-            viewModel.onError("Failed to load stream: ${e.localizedMessage}")
-        }
+        exoPlayer.setMediaItem(mediaItem, resumePos)
+        exoPlayer.playbackParameters = PlaybackParameters(uiState.playbackSpeed)
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
     }
 
-    // Dynamic playback speed synchronization
+    // Terapkan kecepatan putar secara reaktif (berlaku saat video play maupun pause)
     LaunchedEffect(uiState.playbackSpeed) {
-        mediaPlayer?.let { mp ->
-            try {
-                if (mp.isPlaying) {
-                    mp.playbackParams = PlaybackParams().setSpeed(uiState.playbackSpeed)
-                }
-            } catch (_: Exception) {}
-        }
+        exoPlayer.playbackParameters = PlaybackParameters(uiState.playbackSpeed)
     }
 
-    // Periodic time update ticker
-    LaunchedEffect(mediaPlayer, isSeeking) {
-        while (true) {
-            delay(400)
-            mediaPlayer?.let { mp ->
-                if (mp.isPlaying && !isSeeking) {
-                    val pos = mp.currentPosition.toLong()
-                    val dur = mp.duration.toLong()
-                    viewModel.onPositionChanged(pos, dur)
-                }
+    // Ticker posisi: berjalan setiap 200 ms untuk sinkronisasi posisi dan subtitle SRT
+    LaunchedEffect(exoPlayer, isSeeking) {
+        while (isActive) {
+            delay(200)
+            if (!isSeeking && exoPlayer.playbackState != Player.STATE_IDLE) {
+                val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                val dur = exoPlayer.duration.coerceAtLeast(0L)
+                viewModel.onPositionChanged(pos, dur)
             }
         }
     }
 
-    // Flash animation cleanup
+    // Flash animasi double tap cleanup
     LaunchedEffect(doubleTapFlashText) {
         if (doubleTapFlashText != null) {
             delay(750)
@@ -192,15 +217,8 @@ fun CloudStreamPlayer(
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            try {
-                mediaPlayer?.stop()
-                mediaPlayer?.release()
-                mediaPlayer = null
-            } catch (_: Exception) {}
-        }
-    }
+    val isHlsStream = streamUrl?.contains(".m3u8", ignoreCase = true) == true
+    val hasMultipleSources = (uiState.mediaItem?.streamSources?.size ?: 0) > 1
 
     Box(
         modifier = Modifier
@@ -208,46 +226,30 @@ fun CloudStreamPlayer(
             .background(Color.Black)
             .testTag("cloud_stream_player")
     ) {
-        // Video Surface
-        val videoModifier = when (uiState.aspectRatioMode) {
-            AspectRatioMode.FIT -> Modifier
-                .fillMaxSize()
-            AspectRatioMode.FILL -> Modifier
-                .fillMaxSize()
-            AspectRatioMode.SIXTEEN_NINE -> Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .align(Alignment.Center)
-        }
-
+        // PlayerView Media3
         AndroidView(
             factory = { ctx ->
-                SurfaceView(ctx).apply {
+                PlayerView(ctx).apply {
+                    this.player = exoPlayer
+                    useController = false
                     layoutParams = FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
                         FrameLayout.LayoutParams.MATCH_PARENT
                     )
-                    holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(h: SurfaceHolder) {
-                            surfaceHolder = h
-                            mediaPlayer?.setDisplay(h)
-                        }
-
-                        override fun surfaceChanged(h: SurfaceHolder, format: Int, w: Int, hInt: Int) {
-                            surfaceHolder = h
-                        }
-
-                        override fun surfaceDestroyed(h: SurfaceHolder) {
-                            surfaceHolder = null
-                            mediaPlayer?.setDisplay(null)
-                        }
-                    })
                 }
             },
-            modifier = videoModifier
+            update = { playerView ->
+                playerView.player = exoPlayer
+                playerView.resizeMode = when (uiState.aspectRatioMode) {
+                    AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    AspectRatioMode.SIXTEEN_NINE -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                }
+            },
+            modifier = Modifier.fillMaxSize()
         )
 
-        // Gesture Detection Overlay: Single tap to show controls, double tap left/right to skip 10s
+        // Gesture Overlay: Single tap untuk toggle kontrol, double tap untuk skip 10s
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -261,18 +263,10 @@ fun CloudStreamPlayer(
                                 val isLeft = offset.x < size.width / 2
                                 if (isLeft) {
                                     doubleTapFlashText = "-10s"
-                                    viewModel.skipBy(-10000L)
-                                    mediaPlayer?.let { mp ->
-                                        val newPos = (mp.currentPosition - 10000).coerceAtLeast(0)
-                                        mp.seekTo(newPos)
-                                    }
+                                    skipBy(-10000L)
                                 } else {
                                     doubleTapFlashText = "+10s"
-                                    viewModel.skipBy(10000L)
-                                    mediaPlayer?.let { mp ->
-                                        val newPos = mp.currentPosition + 10000
-                                        mp.seekTo(newPos)
-                                    }
+                                    skipBy(10000L)
                                 }
                             }
                         }
@@ -280,7 +274,7 @@ fun CloudStreamPlayer(
                 }
         )
 
-        // Animated double tap feedback flash
+        // Flash animasi double-tap
         AnimatedVisibility(
             visible = doubleTapFlashText != null,
             enter = fadeIn(),
@@ -303,7 +297,7 @@ fun CloudStreamPlayer(
             }
         }
 
-        // Live Subtitle Display
+        // Overlay Subtitle SRT Kustom (tersinkronisasi setiap 200 ms)
         if (uiState.currentSubtitleText.isNotBlank()) {
             Box(
                 modifier = Modifier
@@ -328,7 +322,7 @@ fun CloudStreamPlayer(
             }
         }
 
-        // Buffering Indicator
+        // Indikator Buffering
         if (uiState.isBuffering && uiState.errorMessage == null) {
             Box(
                 modifier = Modifier.align(Alignment.Center)
@@ -341,7 +335,7 @@ fun CloudStreamPlayer(
             }
         }
 
-        // Error Banner
+        // Banner Kesalahan Pemutaran
         if (uiState.errorMessage != null) {
             Surface(
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
@@ -363,18 +357,23 @@ fun CloudStreamPlayer(
                     Spacer(modifier = Modifier.height(12.dp))
                     TextButton(
                         onClick = {
-                            uiState.currentSource?.let { viewModel.setQuality(it) }
+                            uiState.currentSource?.let {
+                                val item = Media3Item.fromUri(Uri.parse(it.url))
+                                exoPlayer.setMediaItem(item, uiState.currentPositionMs)
+                                exoPlayer.prepare()
+                                exoPlayer.playWhenReady = true
+                            }
                         }
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = Color.White)
+                        Icon(Icons.Default.Refresh, contentDescription = "Coba lagi", tint = Color.White)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Retry Playback", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Coba Lagi", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        // Lock button only if screen is locked
+        // Tombol Buka Kunci (saat layar terkunci)
         if (uiState.isLocked) {
             AnimatedVisibility(
                 visible = uiState.isControlsVisible,
@@ -392,12 +391,12 @@ fun CloudStreamPlayer(
                         .background(StreamCardOverlay, CircleShape)
                         .testTag("unlock_screen_button")
                 ) {
-                    Icon(Icons.Default.Lock, contentDescription = "Unlock", tint = StreamPrimary)
+                    Icon(Icons.Default.Lock, contentDescription = "Buka Kunci", tint = StreamPrimary)
                 }
             }
         }
 
-        // Full Interactive Player Controls Overlay
+        // Kontrol Pemutar Lengkap
         if (!uiState.isLocked) {
             AnimatedVisibility(
                 visible = uiState.isControlsVisible,
@@ -419,7 +418,7 @@ fun CloudStreamPlayer(
                             )
                         )
                 ) {
-                    // Top Bar
+                    // Bilah Atas
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -430,9 +429,7 @@ fun CloudStreamPlayer(
                         IconButton(
                             onClick = {
                                 viewModel.persistWatchProgress()
-                                mediaPlayer?.stop()
-                                mediaPlayer?.release()
-                                mediaPlayer = null
+                                exoPlayer.stop()
                                 viewModel.closePlayer()
                                 onClose()
                             },
@@ -440,7 +437,7 @@ fun CloudStreamPlayer(
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = "Kembali",
                                 tint = StreamTextPrimary
                             )
                         }
@@ -470,32 +467,30 @@ fun CloudStreamPlayer(
                             }
                         }
 
-                        // Aspect Ratio button
                         IconButton(
                             onClick = { viewModel.cycleAspectRatio() },
                             modifier = Modifier.testTag("aspect_ratio_button")
                         ) {
                             Icon(
                                 Icons.Default.AspectRatio,
-                                contentDescription = "Aspect Ratio",
+                                contentDescription = "Rasio Layar",
                                 tint = StreamTextPrimary
                             )
                         }
 
-                        // Lock Screen button
                         IconButton(
                             onClick = { viewModel.toggleLock() },
                             modifier = Modifier.testTag("lock_screen_button")
                         ) {
                             Icon(
                                 Icons.Default.LockOpen,
-                                contentDescription = "Lock Controls",
+                                contentDescription = "Kunci Kontrol",
                                 tint = StreamTextPrimary
                             )
                         }
                     }
 
-                    // Center Playback Controls: Rewind 10s, Play/Pause, Forward 10s
+                    // Kontrol Tengah: Mundur 10 detik, Putar/Jeda, Maju 10 detik
                     Row(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -504,13 +499,7 @@ fun CloudStreamPlayer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = {
-                                viewModel.skipBy(-10000L)
-                                mediaPlayer?.let { mp ->
-                                    val newPos = (mp.currentPosition - 10000).coerceAtLeast(0)
-                                    mp.seekTo(newPos)
-                                }
-                            },
+                            onClick = { skipBy(-10000L) },
                             modifier = Modifier
                                 .size(52.dp)
                                 .background(StreamCardOverlay, CircleShape)
@@ -518,7 +507,7 @@ fun CloudStreamPlayer(
                         ) {
                             Icon(
                                 Icons.Default.FastRewind,
-                                contentDescription = "Rewind 10 seconds",
+                                contentDescription = "Mundur 10 detik",
                                 tint = StreamTextPrimary,
                                 modifier = Modifier.size(28.dp)
                             )
@@ -526,15 +515,11 @@ fun CloudStreamPlayer(
 
                         IconButton(
                             onClick = {
-                                mediaPlayer?.let { mp ->
-                                    if (mp.isPlaying) {
-                                        mp.pause()
-                                        viewModel.onPlaybackStateChanged(isPlaying = false, isBuffering = false)
-                                        viewModel.persistWatchProgress()
-                                    } else {
-                                        mp.start()
-                                        viewModel.onPlaybackStateChanged(isPlaying = true, isBuffering = false)
-                                    }
+                                if (exoPlayer.isPlaying) {
+                                    exoPlayer.pause()
+                                    viewModel.persistWatchProgress()
+                                } else {
+                                    exoPlayer.play()
                                 }
                             },
                             modifier = Modifier
@@ -544,20 +529,14 @@ fun CloudStreamPlayer(
                         ) {
                             Icon(
                                 imageVector = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                                contentDescription = if (uiState.isPlaying) "Jeda" else "Putar",
                                 tint = Color.Black,
                                 modifier = Modifier.size(38.dp)
                             )
                         }
 
                         IconButton(
-                            onClick = {
-                                viewModel.skipBy(10000L)
-                                mediaPlayer?.let { mp ->
-                                    val newPos = mp.currentPosition + 10000
-                                    mp.seekTo(newPos)
-                                }
-                            },
+                            onClick = { skipBy(10000L) },
                             modifier = Modifier
                                 .size(52.dp)
                                 .background(StreamCardOverlay, CircleShape)
@@ -565,14 +544,14 @@ fun CloudStreamPlayer(
                         ) {
                             Icon(
                                 Icons.Default.FastForward,
-                                contentDescription = "Forward 10 seconds",
+                                contentDescription = "Maju 10 detik",
                                 tint = StreamTextPrimary,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
                     }
 
-                    // Bottom Bar: Timeline Scrubber + Action Badges (Speed, Quality, Subtitles)
+                    // Bilah Bawah: Garis Waktu & Opsi Cepat (Kecepatan, Kualitas, Subtitle)
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -580,7 +559,6 @@ fun CloudStreamPlayer(
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
-                        // Time Scrubber
                         val currentMs = if (isSeeking) scrubPositionMs else uiState.currentPositionMs
                         val durMs = uiState.durationMs
 
@@ -603,8 +581,7 @@ fun CloudStreamPlayer(
                                 },
                                 onValueChangeFinished = {
                                     isSeeking = false
-                                    viewModel.seekTo(scrubPositionMs)
-                                    mediaPlayer?.seekTo(scrubPositionMs.toInt())
+                                    performSeek(scrubPositionMs)
                                 },
                                 colors = SliderDefaults.colors(
                                     thumbColor = StreamPrimary,
@@ -625,14 +602,13 @@ fun CloudStreamPlayer(
                             )
                         }
 
-                        // Bottom Actions: Speed, Quality, Subtitles
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                // Speed Chip
+                                // Chip Kecepatan
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = StreamDarkSurface,
@@ -650,25 +626,32 @@ fun CloudStreamPlayer(
                                     }
                                 }
 
-                                // Quality Chip
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = StreamDarkSurface,
-                                    modifier = Modifier
-                                        .clickable { viewModel.toggleQualityDialog(true) }
-                                        .testTag("player_quality_chip")
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                // Chip Kualitas: Tampilkan hanya jika stream adaptif atau ada beberapa sumber
+                                if (isHlsStream || hasMultipleSources) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = StreamDarkSurface,
+                                        modifier = Modifier
+                                            .clickable { viewModel.toggleQualityDialog(true) }
+                                            .testTag("player_quality_chip")
                                     ) {
-                                        Icon(Icons.Default.HighQuality, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(text = uiState.currentSource?.quality ?: "Auto", color = StreamTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.HighQuality, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            val qualityLabel = if (isHlsStream && selectedHlsMaxHeight != Int.MAX_VALUE) {
+                                                "${selectedHlsMaxHeight}p"
+                                            } else {
+                                                uiState.currentSource?.quality ?: "Auto"
+                                            }
+                                            Text(text = qualityLabel, color = StreamTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
 
-                                // Subtitle Chip
+                                // Chip Subtitle
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = StreamDarkSurface,
@@ -702,7 +685,7 @@ fun CloudStreamPlayer(
             }
         }
 
-        // Speed Selection Bottom Sheet
+        // Bottom Sheet: Pilihan Kecepatan
         if (uiState.showSpeedDialog) {
             ModalBottomSheet(
                 onDismissRequest = { viewModel.toggleSpeedDialog(false) },
@@ -714,7 +697,7 @@ fun CloudStreamPlayer(
                         .padding(20.dp)
                 ) {
                     Text(
-                        text = "Playback Speed",
+                        text = "Kecepatan Pemutaran",
                         color = StreamTextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -746,7 +729,7 @@ fun CloudStreamPlayer(
             }
         }
 
-        // Quality Selection Bottom Sheet
+        // Bottom Sheet: Pilihan Kualitas (TrackSelectionParameters untuk HLS atau pilih mirror/sumber)
         if (uiState.showQualityDialog) {
             ModalBottomSheet(
                 onDismissRequest = { viewModel.toggleQualityDialog(false) },
@@ -758,44 +741,88 @@ fun CloudStreamPlayer(
                         .padding(20.dp)
                 ) {
                     Text(
-                        text = "Select Stream Quality",
+                        text = if (isHlsStream) "Resolusi Stream Adaptif (HLS)" else "Pilih Sumber & Kualitas",
                         color = StreamTextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    uiState.mediaItem?.streamSources?.forEach { source ->
-                        val isSelected = uiState.currentSource?.url == source.url
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) StreamPrimary.copy(alpha = 0.2f) else Color.Transparent)
-                                .clickable { viewModel.setQuality(source) }
-                                .padding(vertical = 12.dp, horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = source.label,
-                                color = if (isSelected) StreamPrimary else StreamTextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                            Text(
-                                text = source.quality,
-                                color = StreamPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                    if (isHlsStream) {
+                        val resolutions = listOf(
+                            Pair("Auto (Adaptif)", Int.MAX_VALUE),
+                            Pair("1080p FHD Maks", 1080),
+                            Pair("720p HD Maks", 720),
+                            Pair("480p SD Maks", 480),
+                            Pair("360p Hemat Data", 360)
+                        )
+                        resolutions.forEach { (label, maxH) ->
+                            val isSelected = selectedHlsMaxHeight == maxH
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) StreamPrimary.copy(alpha = 0.2f) else Color.Transparent)
+                                    .clickable {
+                                        selectedHlsMaxHeight = maxH
+                                        if (maxH == Int.MAX_VALUE) {
+                                            trackSelector.setParameters(
+                                                trackSelector.buildUponParameters()
+                                                    .clearVideoSizeConstraints()
+                                            )
+                                        } else {
+                                            trackSelector.setParameters(
+                                                trackSelector.buildUponParameters()
+                                                    .setMaxVideoSize(Int.MAX_VALUE, maxH)
+                                            )
+                                        }
+                                        viewModel.toggleQualityDialog(false)
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) StreamPrimary else StreamTextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    } else {
+                        uiState.mediaItem?.streamSources?.forEach { source ->
+                            val isSelected = uiState.currentSource?.url == source.url
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) StreamPrimary.copy(alpha = 0.2f) else Color.Transparent)
+                                    .clickable { viewModel.setQuality(source) }
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = source.label,
+                                    color = if (isSelected) StreamPrimary else StreamTextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                Text(
+                                    text = source.quality,
+                                    color = StreamPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Subtitle Selection Bottom Sheet
+        // Bottom Sheet: Pilihan Subtitle
         if (uiState.showSubtitleDialog) {
             ModalBottomSheet(
                 onDismissRequest = { viewModel.toggleSubtitleDialog(false) },
@@ -807,14 +834,14 @@ fun CloudStreamPlayer(
                         .padding(20.dp)
                 ) {
                     Text(
-                        text = "Subtitles / Captions",
+                        text = "Subtitle / Teks Terjemahan",
                         color = StreamTextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    // Option: Off
+                    // Opsi: Nonaktifkan
                     val isOff = uiState.selectedSubtitle == null
                     Row(
                         modifier = Modifier
@@ -826,14 +853,14 @@ fun CloudStreamPlayer(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Off",
+                            text = "Nonaktif (Off)",
                             color = if (isOff) StreamPrimary else StreamTextPrimary,
                             fontSize = 16.sp,
                             fontWeight = if (isOff) FontWeight.Bold else FontWeight.Normal
                         )
                     }
 
-                    // Available Subtitle Tracks
+                    // Trek yang tersedia
                     uiState.mediaItem?.subtitles?.forEach { track ->
                         val isSelected = uiState.selectedSubtitle?.code == track.code
                         Row(

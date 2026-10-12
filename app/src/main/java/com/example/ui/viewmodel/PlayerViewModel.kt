@@ -56,10 +56,11 @@ class PlayerViewModel(private val repository: MediaRepository) : ViewModel() {
             val initialSub = media.subtitles.firstOrNull()
             val cues = if (initialSub != null) SrtParser.parse(initialSub.srtContent) else emptyList()
 
+            // isPlaying dimulai dari false sampai Player.Listener mengonfirmasi pemutaran
             _uiState.value = PlayerUiState(
                 mediaItem = media,
                 currentSource = source,
-                isPlaying = true,
+                isPlaying = false,
                 isBuffering = true,
                 currentPositionMs = resumePos,
                 durationMs = if (media.durationMs > 0) media.durationMs else 0L,
@@ -78,24 +79,45 @@ class PlayerViewModel(private val repository: MediaRepository) : ViewModel() {
         }
     }
 
-    fun onPlaybackStateChanged(isPlaying: Boolean, isBuffering: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            isPlaying = isPlaying,
-            isBuffering = isBuffering
-        )
+    // Dipanggil langsung dari Player.Listener.onIsPlayingChanged
+    fun onIsPlayingChanged(isPlaying: Boolean) {
+        _uiState.value = _uiState.value.copy(isPlaying = isPlaying)
         if (isPlaying) {
             resetControlsTimer()
         }
+    }
+
+    // Dipanggil langsung dari Player.Listener.onPlaybackStateChanged
+    fun onPlaybackStateChanged(isBuffering: Boolean, isEnded: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isBuffering = isBuffering,
+            isPlaying = if (isEnded) false else _uiState.value.isPlaying
+        )
     }
 
     fun onPositionChanged(positionMs: Long, durationMs: Long) {
         val state = _uiState.value
         val effectiveDuration = if (durationMs > 0) durationMs else state.durationMs
 
-        // Find active subtitle cue
-        val activeCueText = state.parsedCues.find {
-            positionMs >= it.startTimeMs && positionMs <= it.endTimeMs
-        }?.text ?: ""
+        // Binary search untuk menemukan subtitle cue aktif
+        val cues = state.parsedCues
+        var low = 0
+        var high = cues.size - 1
+        var candidateIndex = -1
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (cues[mid].startTimeMs <= positionMs) {
+                candidateIndex = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        val activeCueText = if (candidateIndex != -1 && positionMs <= cues[candidateIndex].endTimeMs) {
+            cues[candidateIndex].text
+        } else {
+            ""
+        }
 
         _uiState.value = state.copy(
             currentPositionMs = positionMs,
@@ -104,28 +126,14 @@ class PlayerViewModel(private val repository: MediaRepository) : ViewModel() {
         )
     }
 
-    fun seekTo(positionMs: Long) {
-        _uiState.value = _uiState.value.copy(currentPositionMs = positionMs)
-        persistWatchProgress()
-        resetControlsTimer()
-    }
-
-    fun skipBy(deltaMs: Long) {
-        val state = _uiState.value
-        val newPos = (state.currentPositionMs + deltaMs).coerceIn(0L, if (state.durationMs > 0) state.durationMs else Long.MAX_VALUE)
-        seekTo(newPos)
-    }
-
     fun setPlaybackSpeed(speed: Float) {
         _uiState.value = _uiState.value.copy(playbackSpeed = speed, showSpeedDialog = false)
         resetControlsTimer()
     }
 
     fun setQuality(source: StreamSource) {
-        val currentPos = _uiState.value.currentPositionMs
         _uiState.value = _uiState.value.copy(
             currentSource = source,
-            currentPositionMs = currentPos,
             isBuffering = true,
             showQualityDialog = false
         )
@@ -155,7 +163,6 @@ class PlayerViewModel(private val repository: MediaRepository) : ViewModel() {
 
     fun toggleControls() {
         if (_uiState.value.isLocked) {
-            // If locked, single tap briefly shows unlock button
             _uiState.value = _uiState.value.copy(isControlsVisible = !_uiState.value.isControlsVisible)
             return
         }

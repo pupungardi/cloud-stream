@@ -60,6 +60,7 @@ enum class MainTab(val title: String) {
     SOURCES("Sources")
 }
 
+@androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 fun MainScreen(
     catalogViewModel: CatalogViewModel,

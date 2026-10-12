@@ -222,13 +222,21 @@ fun SourcesScreen(
                         // Test URL button
                         OutlinedButton(
                             onClick = {
-                                if (sourceUrl.isBlank()) {
-                                    errorMessage = "Please enter a stream URL first."
+                                val trimmed = sourceUrl.trim()
+                                if (trimmed.isBlank()) {
+                                    errorMessage = "Silakan masukkan URL sumber stream."
+                                    return@OutlinedButton
+                                }
+                                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+                                    errorMessage = "URL harus diawali dengan http:// atau https://"
+                                    urlTestResult = null
                                     return@OutlinedButton
                                 }
                                 isCheckingUrl = true
+                                errorMessage = null
+                                urlTestResult = null
                                 scope.launch {
-                                    val isOk = viewModel.testUrl(sourceUrl.trim())
+                                    val isOk = viewModel.testUrl(trimmed)
                                     urlTestResult = isOk
                                     isCheckingUrl = false
                                 }
@@ -252,13 +260,19 @@ fun SourcesScreen(
                         // Add Source button
                         Button(
                             onClick = {
-                                if (sourceUrl.isBlank()) {
-                                    errorMessage = "Please enter a stream URL."
+                                val trimmed = sourceUrl.trim()
+                                if (trimmed.isBlank()) {
+                                    errorMessage = "Silakan masukkan URL sumber stream."
+                                    return@Button
+                                }
+                                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+                                    errorMessage = "URL harus diawali dengan http:// atau https://"
                                     return@Button
                                 }
                                 val name = if (sourceName.isBlank()) "Stream Source #${customSources.size + 1}" else sourceName.trim()
-                                val type = if (sourceUrl.contains(".m3u8", ignoreCase = true)) "HLS" else "DIRECT"
-                                viewModel.addCustomSource(name, sourceUrl.trim(), type)
+                                val isHls = trimmed.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
+                                val type = if (isHls) "HLS" else "DIRECT"
+                                viewModel.addCustomSource(name, trimmed, type)
                                 sourceName = ""
                                 sourceUrl = ""
                                 urlTestResult = null

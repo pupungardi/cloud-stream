@@ -156,6 +156,9 @@ fun MainScreen(
                             onQuickPlay = { item, source ->
                                 activePlayerMedia = item
                                 playerViewModel.loadMedia(item, source)
+                            },
+                            onNavigateToSources = {
+                                selectedTabIndex = 2
                             }
                         )
                     }

@@ -20,7 +20,7 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    private val _selectedCategory = MutableStateFlow("All")
+    private val _selectedCategory = MutableStateFlow("")
     val selectedCategory = _selectedCategory.asStateFlow()
 
     private val _selectedMedia = MutableStateFlow<MediaItem?>(null)
@@ -65,7 +65,7 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
                 item.description.contains(query, ignoreCase = true) ||
                 item.category.contains(query, ignoreCase = true)
 
-            val matchesCategory = category == "All" || item.category.equals(category, ignoreCase = true)
+            val matchesCategory = category.isBlank() || item.category.equals(category, ignoreCase = true)
 
             matchesQuery && matchesCategory
         }
@@ -80,7 +80,7 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
     }
 
     fun onSelectCategory(category: String) {
-        _selectedCategory.value = category
+        _selectedCategory.value = if (_selectedCategory.value == category) "" else category
     }
 
     fun openMediaDetails(item: MediaItem) {

@@ -25,7 +25,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -84,7 +86,8 @@ import kotlinx.coroutines.isActive
 fun HomeScreen(
     viewModel: CatalogViewModel,
     onOpenMedia: (MediaItem) -> Unit,
-    onQuickPlay: (MediaItem, StreamSource) -> Unit
+    onQuickPlay: (MediaItem, StreamSource) -> Unit,
+    onNavigateToSources: () -> Unit = {}
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -96,7 +99,7 @@ fun HomeScreen(
 
     val categories = remember(rawItems) {
         val distinctCats = rawItems.map { it.category }.filter { it.isNotBlank() }.distinct()
-        listOf("All") + distinctCats
+        distinctCats
     }
 
     val groupedCategories = remember(rawItems) {
@@ -187,7 +190,7 @@ fun HomeScreen(
         }
 
         // Hero Spotlight Carousel (Desain persis seperti referensi dengan logo text)
-        if (searchQuery.isBlank() && selectedCategory == "All" && featuredItems.isNotEmpty()) {
+        if (searchQuery.isBlank() && selectedCategory.isBlank() && featuredItems.isNotEmpty()) {
             item {
                 HeroCarousel(
                     featuredItems = featuredItems,
@@ -220,22 +223,67 @@ fun HomeScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (rawItems.isEmpty()) {
+                            Icon(
+                                Icons.Default.Cloud,
+                                contentDescription = null,
+                                tint = StreamDarkSurfaceVariant,
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "No stream sources added",
+                                text = "Belum ada sumber media",
                                 color = StreamTextPrimary,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Import your streaming feeds or URLs in the Sources tab to start watching.",
+                                text = "Tambahkan tautan atau stream media Anda sendiri di tab Sumber untuk mulai menonton.",
                                 color = StreamTextSecondary,
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 6.dp)
+                                modifier = Modifier.padding(top = 6.dp, bottom = 18.dp)
                             )
+                            Button(
+                                onClick = onNavigateToSources,
+                                colors = ButtonDefaults.buttonColors(containerColor = StreamPrimary),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.testTag("home_empty_add_source_button")
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Tambah Sumber", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        } else if (searchQuery.isNotBlank()) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                tint = StreamDarkSurfaceVariant,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Tidak ada hasil",
+                                color = StreamTextPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Tidak ditemukan stream yang cocok dengan \"$searchQuery\"",
+                                color = StreamTextSecondary,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                            )
+                            Button(
+                                onClick = { viewModel.onSearchQueryChange("") },
+                                colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Hapus Pencarian", color = StreamPrimary)
+                            }
                         } else {
                             Text(
-                                text = "No streams match your filter",
+                                text = "Tidak ada stream dalam kategori ini",
                                 color = StreamTextSecondary,
                                 fontSize = 16.sp
                             )
@@ -243,17 +291,18 @@ fun HomeScreen(
                             Button(
                                 onClick = {
                                     viewModel.onSearchQueryChange("")
-                                    viewModel.onSelectCategory("All")
+                                    viewModel.onSelectCategory("")
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant)
+                                colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("Reset Filters", color = StreamPrimary)
+                                Text("Reset Filter", color = StreamPrimary)
                             }
                         }
                     }
                 }
             }
-        } else if (searchQuery.isNotBlank() || selectedCategory != "All") {
+        } else if (searchQuery.isNotBlank() || selectedCategory.isNotBlank()) {
             // Filtered Grid / Column view
             item {
                 Text(

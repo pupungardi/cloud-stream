@@ -237,12 +237,8 @@ fun MainScreen(
                             onOpenMedia = { item ->
                                 catalogViewModel.openMediaDetails(item)
                             },
-                            onQuickPlay = { item, source ->
-                                activePlayerMedia = item
-                                playerViewModel.loadMedia(item, source)
-                            },
-                            onNavigateDiscover = {
-                                selectedTabIndex = 0
+                            onNavigateSources = {
+                                selectedTabIndex = 3
                             }
                         )
                     }

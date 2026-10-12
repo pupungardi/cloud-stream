@@ -1,496 +1,348 @@
 package com.example.ui.library
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewStream
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import coil.compose.AsyncImage
 import com.example.model.MediaItem
-import com.example.ui.home.MediaPosterPlaceholder
-import com.example.ui.theme.StreamDarkBackground
-import com.example.ui.theme.StreamDarkBorder
-import com.example.ui.theme.StreamDarkSurface
-import com.example.ui.theme.StreamDarkSurfaceVariant
-import com.example.ui.theme.StreamGold
-import com.example.ui.theme.StreamPrimary
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import com.example.ui.theme.StreamTextPrimary
-import com.example.ui.theme.StreamTextSecondary
 import com.example.ui.viewmodel.CatalogViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.example.ui.viewmodel.LibrarySegment
+import com.example.ui.viewmodel.LibraryViewMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     viewModel: CatalogViewModel,
     onOpenMedia: (MediaItem) -> Unit,
-    onQuickPlay: (MediaItem, com.example.model.StreamSource) -> Unit,
-    onNavigateDiscover: () -> Unit
+    onNavigateSources: () -> Unit
 ) {
-    val bookmarks by viewModel.bookmarks.collectAsState()
-    val watchHistory by viewModel.watchHistory.collectAsState()
-    val allItems by viewModel.rawMediaItems.collectAsState()
+    val segment by viewModel.librarySegment.collectAsState()
+    val viewMode by viewModel.libraryViewMode.collectAsState()
+    val selectedType by viewModel.librarySelectedType.collectAsState()
+    val sortOrder by viewModel.librarySortOrder.collectAsState()
+    val availableTypes by viewModel.libraryAvailableTypes.collectAsState()
+    val items by viewModel.libraryItems.collectAsState()
+    val groupedItems by viewModel.libraryGroupedItems.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var showClearHistoryDialog by remember { mutableStateOf(false) }
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val totalBottomPadding = navBarHeight + 90.dp
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(StreamDarkBackground)
+            .background(Color.Black)
             .testTag("library_screen")
     ) {
-        // Header
-        Column(
+        LibraryHeader(
+            viewMode = viewMode,
+            onToggleViewMode = {
+                viewModel.setLibraryViewMode(
+                    if (viewMode == LibraryViewMode.ROW) LibraryViewMode.GRID else LibraryViewMode.ROW
+                )
+            }
+        )
+
+        LibrarySegmentChips(
+            selectedSegment = segment,
+            onSelectSegment = { viewModel.setLibrarySegment(it) }
+        )
+
+        LibraryFilterRow(
+            viewMode = viewMode,
+            availableTypes = availableTypes,
+            selectedType = selectedType,
+            onSelectType = { viewModel.setLibrarySelectedType(it) },
+            sortOrder = sortOrder,
+            onSelectSort = { viewModel.setLibrarySortOrder(it) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            AnimatedContent(
+                targetState = viewMode,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "view_mode_transition"
+            ) { mode ->
+                if (mode == LibraryViewMode.ROW) {
+                    LibraryRowsContent(
+                        groupedItems = groupedItems,
+                        onOpenMedia = onOpenMedia,
+                        contentPadding = PaddingValues(bottom = totalBottomPadding, top = 8.dp)
+                    )
+                } else {
+                    LibraryGridContent(
+                        items = items,
+                        onOpenMedia = onOpenMedia,
+                        onNavigateSources = onNavigateSources,
+                        isCloudEmpty = segment == LibrarySegment.CLOUD && items.isEmpty(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = totalBottomPadding, top = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LibraryHeader(
+    viewMode: LibraryViewMode,
+    onToggleViewMode: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Pustaka",
+            color = Color.White,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF1C1C1E))
+                .clickable(onClick = onToggleViewMode)
+                .testTag("toggle_view_mode_btn"),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Library",
-                color = StreamTextPrimary,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Your favorite streams and viewing history",
-                color = StreamTextSecondary,
-                fontSize = 13.sp
+            Icon(
+                imageVector = if (viewMode == LibraryViewMode.ROW) Icons.Default.GridView else Icons.Default.ViewStream,
+                contentDescription = if (viewMode == LibraryViewMode.ROW) "Beralih ke mode Grid" else "Beralih ke mode Baris",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
             )
         }
+    }
+}
 
-        // Quick Stats Row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+@Composable
+fun LibrarySegmentChips(
+    selectedSegment: LibrarySegment,
+    onSelectSegment: (LibrarySegment) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        LibrarySegment.entries.forEach { segment ->
+            val isSelected = selectedSegment == segment
+            val title = if (segment == LibrarySegment.TERSIMPAN) "Tersimpan" else "Cloud"
+            val bg = if (isSelected) Color(0xFF12304D) else Color(0xFF1C1C1E)
+            val border = if (isSelected) BorderStroke(1.dp, Color(0xFF2D6CB5)) else null
+            val textColor = if (isSelected) Color.White else Color(0xFFAAAAAA)
+
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = StreamDarkSurface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
-                modifier = Modifier.weight(1f)
+                color = bg,
+                border = border,
+                modifier = Modifier
+                    .height(42.dp)
+                    .clickable { onSelectSegment(segment) }
+                    .testTag("segment_${segment.name.lowercase()}")
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(StreamGold.copy(alpha = 0.15f), CircleShape),
-                        contentAlignment = Alignment.Center
+                    Text(
+                        text = title,
+                        color = textColor,
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LibraryFilterRow(
+    viewMode: LibraryViewMode,
+    availableTypes: List<String>,
+    selectedType: String,
+    onSelectType: (String) -> Unit,
+    sortOrder: String,
+    onSelectSort: (String) -> Unit
+) {
+    val sortOptions = listOf("Recently added", "Title A-Z", "Title Z-A", "Year (terbaru)", "Recently watched")
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (viewMode == LibraryViewMode.GRID) {
+            Box(modifier = Modifier.weight(1f)) {
+                var expanded by remember { mutableStateOf(false) }
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF1C1C1E),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clickable { expanded = true }
+                        .testTag("type_dropdown_btn")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Bookmark, contentDescription = null, tint = StreamGold, modifier = Modifier.size(18.dp))
+                        Text(text = selectedType, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(text = "${bookmarks.size}", color = StreamTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Watchlist", color = StreamTextSecondary, fontSize = 11.sp)
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(Color(0xFF1C1C1E))
+                ) {
+                    availableTypes.forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type, color = Color.White) },
+                            onClick = {
+                                onSelectType(type)
+                                expanded = false
+                            }
+                        )
                     }
                 }
             }
+        }
 
+        Box(modifier = Modifier.weight(1f)) {
+            var expanded by remember { mutableStateOf(false) }
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = StreamDarkSurface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
-                modifier = Modifier.weight(1f)
+                color = Color(0xFF1C1C1E),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clickable { expanded = true }
+                    .testTag("sort_dropdown_btn")
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(StreamPrimary.copy(alpha = 0.15f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.History, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(18.dp))
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(text = "${watchHistory.size}", color = StreamTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Watched", color = StreamTextSecondary, fontSize = 11.sp)
-                    }
+                    Text(text = sortOrder, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
+                }
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF1C1C1E))
+            ) {
+                sortOptions.forEach { opt ->
+                    DropdownMenuItem(
+                        text = { Text(opt, color = Color.White) },
+                        onClick = {
+                            onSelectSort(opt)
+                            expanded = false
+                        }
+                    )
                 }
             }
         }
+    }
+}
 
-        // Tab Row
-        PrimaryTabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = StreamDarkBackground,
-            contentColor = StreamPrimary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+@Composable
+fun LibraryRowsContent(
+    groupedItems: Map<String, List<MediaItem>>,
+    onOpenMedia: (MediaItem) -> Unit,
+    contentPadding: PaddingValues
+) {
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val cardWidth = screenWidth * 0.62f
+
+    if (groupedItems.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center
         ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Watchlist (${bookmarks.size})", fontWeight = FontWeight.Bold) },
-                modifier = Modifier.testTag("tab_watchlist")
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text("History (${watchHistory.size})", fontWeight = FontWeight.Bold) },
-                modifier = Modifier.testTag("tab_history")
-            )
-        }
-
-        // Tab Content
-        if (selectedTab == 0) {
-            // Bookmarks Tab
-            if (bookmarks.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.Bookmark,
-                            contentDescription = null,
-                            tint = StreamDarkSurfaceVariant,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Your Watchlist is empty",
-                            color = StreamTextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Save movies and streams to easily watch them later",
-                            color = StreamTextSecondary,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
-                        )
-                        Button(
-                            onClick = onNavigateDiscover,
-                            colors = ButtonDefaults.buttonColors(containerColor = StreamPrimary),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Discover Streams", color = Color.Black, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 90.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(bookmarks) { b ->
-                        val matched = allItems.find { it.id == b.mediaId }
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    matched?.let { onOpenMedia(it) }
-                                }
-                                .testTag("bookmark_item_${b.mediaId}")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (!b.posterUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = b.posterUrl,
-                                        contentDescription = b.title,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(64.dp, 96.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    )
-                                } else {
-                                    MediaPosterPlaceholder(
-                                        title = b.title,
-                                        modifier = Modifier
-                                            .size(64.dp, 96.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = b.title,
-                                        color = StreamTextPrimary,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(4.dp),
-                                            color = StreamDarkSurfaceVariant
-                                        ) {
-                                            Text(
-                                                text = b.category,
-                                                color = StreamPrimary,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                        if (b.rating > 0f) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(12.dp))
-                                                Spacer(modifier = Modifier.width(2.dp))
-                                                Text(text = "%.1f".format(b.rating), color = StreamGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-                                    Text(
-                                        text = "Duration: ${b.durationText}",
-                                        color = StreamTextSecondary,
-                                        fontSize = 12.sp
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (matched != null && matched.streamSources.isNotEmpty()) {
-                                        IconButton(
-                                            onClick = { onQuickPlay(matched, matched.streamSources.first()) },
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .background(StreamPrimary.copy(alpha = 0.2f), CircleShape)
-                                        ) {
-                                            Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = StreamPrimary, modifier = Modifier.size(18.dp))
-                                        }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            matched?.let { viewModel.toggleBookmark(it, true) }
-                                        }
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "Remove Bookmark",
-                                            tint = StreamTextSecondary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(64.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = "Belum ada yang tersimpan", color = Color(0xFF888888), fontSize = 15.sp)
             }
-        } else {
-            // History Tab
-            if (watchHistory.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.History,
-                            contentDescription = null,
-                            tint = StreamDarkSurfaceVariant,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
+        }
+        return
+    }
+
+    LazyColumn(
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        groupedItems.forEach { (category, items) ->
+            if (items.isNotEmpty()) {
+                item(key = category) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "No watch history yet",
-                            color = StreamTextPrimary,
+                            text = category,
+                            color = Color.White,
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                         )
-                        Text(
-                            text = "Play streams and your progress will automatically sync here",
-                            color = StreamTextSecondary,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
-                        )
-                        Button(
-                            onClick = onNavigateDiscover,
-                            colors = ButtonDefaults.buttonColors(containerColor = StreamPrimary),
-                            shape = RoundedCornerShape(12.dp)
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text("Start Streaming", color = Color.Black, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 90.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(onClick = { showClearHistoryDialog = true }) {
-                                Icon(Icons.Default.Delete, contentDescription = null, tint = StreamTextSecondary, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Clear History", color = StreamTextSecondary, fontSize = 13.sp)
-                            }
-                        }
-                    }
-
-                    items(watchHistory) { h ->
-                        val matched = allItems.find { it.id == h.mediaId }
-                        val progress = if (h.durationMs > 0) h.lastPositionMs.toFloat() / h.durationMs.toFloat() else 0f
-                        val dateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
-
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    matched?.let { onOpenMedia(it) }
-                                }
-                                .testTag("history_item_${h.mediaId}")
-                        ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (!h.posterUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = h.posterUrl,
-                                            contentDescription = h.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(64.dp, 96.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                        )
-                                    } else {
-                                        MediaPosterPlaceholder(
-                                            title = h.title,
-                                            modifier = Modifier
-                                                .size(64.dp, 96.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = h.title,
-                                            color = StreamTextPrimary,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "Watched ${dateFormat.format(Date(h.updatedAt))}",
-                                            color = StreamTextSecondary,
-                                            fontSize = 12.sp,
-                                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
-                                        )
-                                        Text(
-                                            text = "${(progress * 100).toInt()}% completed",
-                                            color = StreamPrimary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (matched != null && matched.streamSources.isNotEmpty()) {
-                                            IconButton(
-                                                onClick = { onQuickPlay(matched, matched.streamSources.first()) },
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .background(StreamPrimary.copy(alpha = 0.2f), CircleShape)
-                                            ) {
-                                                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = StreamPrimary, modifier = Modifier.size(18.dp))
-                                            }
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                        }
-                                        IconButton(
-                                            onClick = { viewModel.deleteWatchHistory(h.mediaId) }
-                                        ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Delete entry", tint = StreamTextSecondary)
-                                        }
-                                    }
-                                }
-
-                                LinearProgressIndicator(
-                                    progress = { progress.coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp),
-                                    color = StreamPrimary,
-                                    trackColor = StreamDarkSurfaceVariant
+                            items(items, key = { it.id }) { item ->
+                                LibraryBackdropCard(
+                                    item = item,
+                                    width = cardWidth,
+                                    onClick = { onOpenMedia(item) }
                                 )
                             }
                         }
@@ -498,31 +350,248 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+}
 
-        // Clear History Confirmation Dialog
-        if (showClearHistoryDialog) {
-            AlertDialog(
-                onDismissRequest = { showClearHistoryDialog = false },
-                title = { Text("Clear All Watch History?", color = StreamTextPrimary, fontWeight = FontWeight.Bold) },
-                text = { Text("This will permanently remove all viewing progress from your device.", color = StreamTextSecondary) },
-                confirmButton = {
+@Composable
+fun LibraryBackdropCard(
+    item: MediaItem,
+    width: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+        modifier = Modifier
+            .width(width)
+            .height(width * 0.5625f)
+            .clickable(onClick = onClick)
+            .testTag("backdrop_card_${item.id}")
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (!item.backdropUrl.isNullOrBlank() || !item.posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.backdropUrl ?: item.posterUrl,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF2C2C2E)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = item.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
+                            startY = 50f
+                        )
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = item.title.uppercase(),
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LibraryGridContent(
+    items: List<MediaItem>,
+    onOpenMedia: (MediaItem) -> Unit,
+    onNavigateSources: () -> Unit,
+    isCloudEmpty: Boolean,
+    contentPadding: PaddingValues
+) {
+    if (items.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Cloud, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(64.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = "Belum ada item", color = Color(0xFF888888), fontSize = 15.sp)
+                if (isCloudEmpty) {
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = {
-                            viewModel.clearWatchHistory()
-                            showClearHistoryDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        onClick = onNavigateSources,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D6CB5)),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Clear All", color = Color.White)
+                        Text("Tambah sumber", color = Color.White, fontWeight = FontWeight.Bold)
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showClearHistoryDialog = false }) {
-                        Text("Cancel", color = StreamTextPrimary)
-                    }
-                },
-                containerColor = StreamDarkSurface
+                }
+            }
+        }
+        return
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = contentPadding,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        items(items, key = { it.id }) { item ->
+            LibraryPosterCard(
+                item = item,
+                onClick = { onOpenMedia(item) }
             )
         }
+    }
+}
+
+@Composable
+fun LibraryPosterCard(
+    item: MediaItem,
+    onClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(2f / 3f)
+            .clickable(onClick = onClick)
+            .testTag("poster_card_${item.id}")
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val imageUrl = item.posterUrl ?: item.backdropUrl
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF333333), Color(0xFF111111))
+                            )
+                        )
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item.title,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Previews
+@Preview(showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+fun PreviewLibraryRowMode() {
+    val dummyItems = listOf(
+        MediaItem(id = "1", title = "Cyberpunk Series", category = "Series", streamSources = emptyList()),
+        MediaItem(id = "2", title = "Sci-Fi Movie", category = "Movie", streamSources = emptyList())
+    )
+    Column(modifier = Modifier.background(Color.Black).fillMaxSize()) {
+        LibraryHeader(viewMode = LibraryViewMode.ROW, onToggleViewMode = {})
+        LibrarySegmentChips(selectedSegment = LibrarySegment.TERSIMPAN, onSelectSegment = {})
+        LibraryFilterRow(
+            viewMode = LibraryViewMode.ROW,
+            availableTypes = listOf("All types", "Movie", "Series"),
+            selectedType = "All types",
+            onSelectType = {},
+            sortOrder = "Recently added",
+            onSelectSort = {}
+        )
+        LibraryRowsContent(
+            groupedItems = dummyItems.groupBy { it.category },
+            onOpenMedia = {},
+            contentPadding = PaddingValues(16.dp)
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+fun PreviewLibraryGridMode() {
+    val dummyItems = listOf(
+        MediaItem(id = "1", title = "Action Movie 1", category = "Movie", streamSources = emptyList()),
+        MediaItem(id = "2", title = "Action Movie 2", category = "Movie", streamSources = emptyList()),
+        MediaItem(id = "3", title = "Drama Series", category = "Series", streamSources = emptyList())
+    )
+    Column(modifier = Modifier.background(Color.Black).fillMaxSize()) {
+        LibraryHeader(viewMode = LibraryViewMode.GRID, onToggleViewMode = {})
+        LibrarySegmentChips(selectedSegment = LibrarySegment.CLOUD, onSelectSegment = {})
+        LibraryFilterRow(
+            viewMode = LibraryViewMode.GRID,
+            availableTypes = listOf("All types", "Movie", "Series"),
+            selectedType = "Movie",
+            onSelectType = {},
+            sortOrder = "Title A-Z",
+            onSelectSort = {}
+        )
+        LibraryGridContent(
+            items = dummyItems,
+            onOpenMedia = {},
+            onNavigateSources = {},
+            isCloudEmpty = false,
+            contentPadding = PaddingValues(16.dp)
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+fun PreviewLibraryEmptyState() {
+    Column(modifier = Modifier.background(Color.Black).fillMaxSize()) {
+        LibraryHeader(viewMode = LibraryViewMode.ROW, onToggleViewMode = {})
+        LibrarySegmentChips(selectedSegment = LibrarySegment.CLOUD, onSelectSegment = {})
+        LibraryFilterRow(
+            viewMode = LibraryViewMode.ROW,
+            availableTypes = listOf("All types"),
+            selectedType = "All types",
+            onSelectType = {},
+            sortOrder = "Recently added",
+            onSelectSort = {}
+        )
+        LibraryGridContent(
+            items = emptyList(),
+            onOpenMedia = {},
+            onNavigateSources = {},
+            isCloudEmpty = true,
+            contentPadding = PaddingValues(16.dp)
+        )
     }
 }

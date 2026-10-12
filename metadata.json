@@ -1,0 +1,6 @@
+{
+  "name": "CloudStream",
+  "description": "Streaming media catalog and video player with custom source URL imports, playback controls, and watch history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

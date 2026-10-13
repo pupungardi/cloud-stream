@@ -7,7 +7,10 @@ import com.example.data.local.WatchHistoryEntity
 import com.example.model.MediaItem
 import com.example.model.StreamSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -15,19 +18,34 @@ import java.net.URI
 import java.net.URL
 import java.util.UUID
 
-class MediaRepository(private val database: AppDatabase) {
+class MediaRepository(private val database: AppDatabase, private val profileRepository: ProfileRepository? = null) {
 
     private val watchHistoryDao = database.watchHistoryDao()
     private val bookmarkDao = database.bookmarkDao()
     private val customSourceDao = database.customSourceDao()
 
-    val watchHistory: Flow<List<WatchHistoryEntity>> = watchHistoryDao.getAllHistory()
-    val bookmarks: Flow<List<BookmarkEntity>> = bookmarkDao.getAllBookmarks()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val activeProfileIdFlow: Flow<Long> = profileRepository?.activeProfileId ?: flowOf(1L)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val watchHistory: Flow<List<WatchHistoryEntity>> = activeProfileIdFlow
+        .flatMapLatest { profileId ->
+            watchHistoryDao.getAllHistory(profileId)
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val bookmarks: Flow<List<BookmarkEntity>> = activeProfileIdFlow
+        .flatMapLatest { profileId ->
+            bookmarkDao.getAllBookmarks(profileId)
+        }
+
     val customSources: Flow<List<CustomSourceEntity>> = customSourceDao.getAllSources()
 
+    private fun getActiveProfileId(): Long {
+        return profileRepository?.activeProfileId?.value ?: 1L
+    }
+
     fun getAllMediaItems(): Flow<List<MediaItem>> {
-        // Katalog HANYA berasal dari custom source yang isEnabled di database.
-        // Tidak ada daftar bawaan, tidak ada seed saat first launch.
         return customSources.map { sources ->
             val allList = mutableListOf<MediaItem>()
 
@@ -40,14 +58,14 @@ class MediaRepository(private val database: AppDatabase) {
                     MediaItem(
                         id = sourceId,
                         title = source.name,
-                        description = source.url, // Hanya tampilkan URL sumber atau kosongkan
+                        description = source.url,
                         category = categoryName,
-                        posterUrl = null, // Tidak memakai poster Unsplash palsu
+                        posterUrl = null,
                         backdropUrl = null,
                         durationText = if (isHls) "LIVE" else "Stream",
                         durationMs = 0L,
-                        releaseYear = null, // Tidak memakai nilai palsu "Custom"
-                        rating = null,      // Tidak memakai nilai palsu 9.0f
+                        releaseYear = null,
+                        rating = null,
                         isLive = isHls,
                         streamSources = listOf(
                             StreamSource(
@@ -75,7 +93,8 @@ class MediaRepository(private val database: AppDatabase) {
     }
 
     suspend fun getWatchHistoryItem(mediaId: String): WatchHistoryEntity? {
-        return watchHistoryDao.getHistory(mediaId)
+        val profileId = getActiveProfileId()
+        return watchHistoryDao.getHistory(mediaId, profileId)
     }
 
     suspend fun saveWatchProgress(
@@ -87,8 +106,10 @@ class MediaRepository(private val database: AppDatabase) {
         durationMs: Long,
         category: String = ""
     ) {
+        val profileId = getActiveProfileId()
         val entity = WatchHistoryEntity(
             mediaId = mediaId,
+            profileId = profileId,
             title = title,
             posterUrl = posterUrl,
             streamUrl = streamUrl,
@@ -101,23 +122,30 @@ class MediaRepository(private val database: AppDatabase) {
     }
 
     suspend fun deleteWatchHistory(mediaId: String) {
-        watchHistoryDao.deleteHistory(mediaId)
+        val profileId = getActiveProfileId()
+        watchHistoryDao.deleteHistory(mediaId, profileId)
     }
 
     suspend fun clearWatchHistory() {
-        watchHistoryDao.clearAllHistory()
+        val profileId = getActiveProfileId()
+        watchHistoryDao.clearHistoryForProfile(profileId)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun isBookmarked(mediaId: String): Flow<Boolean> {
-        return bookmarkDao.isBookmarked(mediaId)
+        return activeProfileIdFlow.flatMapLatest { profileId ->
+            bookmarkDao.isBookmarked(mediaId, profileId)
+        }
     }
 
     suspend fun toggleBookmark(mediaItem: MediaItem, isCurrentlyBookmarked: Boolean) {
+        val profileId = getActiveProfileId()
         if (isCurrentlyBookmarked) {
-            bookmarkDao.deleteBookmark(mediaItem.id)
+            bookmarkDao.deleteBookmark(mediaItem.id, profileId)
         } else {
             val entity = BookmarkEntity(
                 mediaId = mediaItem.id,
+                profileId = profileId,
                 title = mediaItem.title,
                 category = mediaItem.category,
                 posterUrl = mediaItem.posterUrl ?: "",
@@ -151,7 +179,6 @@ class MediaRepository(private val database: AppDatabase) {
     }
 
     suspend fun testUrlConnectivity(streamUrl: String): Boolean = withContext(Dispatchers.IO) {
-        // Percobaan 1: Menggunakan HEAD request dengan penanganan redirect
         var currentUrl = streamUrl
         var redirects = 0
         while (redirects < 5) {
@@ -185,7 +212,6 @@ class MediaRepository(private val database: AppDatabase) {
             }
         }
 
-        // Percobaan 2 (Fallback): Beberapa server media menolak HEAD; coba GET dengan byte-range
         currentUrl = streamUrl
         redirects = 0
         while (redirects < 5) {

@@ -3,9 +3,19 @@ package com.example.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "watch_history")
+@Entity(tableName = "profiles")
+data class ProfileEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0L,
+    val name: String,
+    val avatarId: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "watch_history", primaryKeys = ["mediaId", "profileId"])
 data class WatchHistoryEntity(
-    @PrimaryKey val mediaId: String,
+    val mediaId: String,
+    val profileId: Long = 1L,
     val title: String,
     val posterUrl: String,
     val streamUrl: String,
@@ -15,9 +25,10 @@ data class WatchHistoryEntity(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "bookmarks")
+@Entity(tableName = "bookmarks", primaryKeys = ["mediaId", "profileId"])
 data class BookmarkEntity(
-    @PrimaryKey val mediaId: String,
+    val mediaId: String,
+    val profileId: Long = 1L,
     val title: String,
     val category: String,
     val posterUrl: String,

@@ -8,8 +8,10 @@ import androidx.activity.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.data.MediaRepository
+import com.example.data.ProfileRepository
 import com.example.data.local.AppDatabase
 import com.example.ui.MainScreen
+import com.example.ui.profile.ProfileViewModel
 import com.example.ui.theme.CloudStreamTheme
 import com.example.ui.viewmodel.CatalogViewModel
 import com.example.ui.viewmodel.PlayerViewModel
@@ -17,7 +19,8 @@ import com.example.ui.viewmodel.PlayerViewModel
 class MainActivity : ComponentActivity() {
 
     private val database by lazy { AppDatabase.getDatabase(applicationContext) }
-    private val repository by lazy { MediaRepository(database) }
+    private val profileRepository by lazy { ProfileRepository(database, applicationContext) }
+    private val repository by lazy { MediaRepository(database, profileRepository) }
 
     private val catalogViewModel: CatalogViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -37,6 +40,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val profileViewModel: ProfileViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return ProfileViewModel(profileRepository) as T
+            }
+        }
+    }
+
     @androidx.compose.material3.ExperimentalMaterial3Api
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +57,8 @@ class MainActivity : ComponentActivity() {
             CloudStreamTheme {
                 MainScreen(
                     catalogViewModel = catalogViewModel,
-                    playerViewModel = playerViewModel
+                    playerViewModel = playerViewModel,
+                    profileViewModel = profileViewModel
                 )
             }
         }

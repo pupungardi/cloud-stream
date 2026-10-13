@@ -64,11 +64,14 @@ sealed class ProfileSubScreen {
     object Sources : ProfileSubScreen()
     object LayoutSettings : ProfileSubScreen()
     object PlaybackSettings : ProfileSubScreen()
+    object WhoIsWatching : ProfileSubScreen()
+    object ManageProfiles : ProfileSubScreen()
 }
 
 @Composable
 fun ProfileSettingsScreen(
-    viewModel: CatalogViewModel
+    viewModel: CatalogViewModel,
+    profileViewModel: ProfileViewModel
 ) {
     var currentSubScreen by remember { mutableStateOf<ProfileSubScreen>(ProfileSubScreen.Main) }
     var updateChannel by remember { mutableStateOf("Stable") }
@@ -81,13 +84,28 @@ fun ProfileSettingsScreen(
 
     // Sub-screen routing
     when (currentSubScreen) {
+        ProfileSubScreen.WhoIsWatching -> {
+            WhoIsWatchingScreen(
+                profileViewModel = profileViewModel,
+                onProfileSelected = { currentSubScreen = ProfileSubScreen.Main },
+                onManageProfiles = { currentSubScreen = ProfileSubScreen.ManageProfiles },
+                onBack = { currentSubScreen = ProfileSubScreen.Main }
+            )
+            return
+        }
+        ProfileSubScreen.ManageProfiles -> {
+            ManageProfilesScreen(
+                profileViewModel = profileViewModel,
+                onBack = { currentSubScreen = ProfileSubScreen.WhoIsWatching }
+            )
+            return
+        }
         ProfileSubScreen.Sources -> {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
             ) {
-                // Header with back button for Sources
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -235,7 +253,6 @@ fun ProfileSettingsScreen(
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
-                // Thin gradient line below header
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -260,8 +277,7 @@ fun ProfileSettingsScreen(
                             title = "Ganti Profil",
                             subtitle = "Beralih ke profil yang berbeda.",
                             onClick = {
-                                comingSoonTitle = "Ganti Profil"
-                                showComingSoonDialog = true
+                                currentSubScreen = ProfileSubScreen.WhoIsWatching
                             }
                         )
                         Divider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp, modifier = Modifier.padding(start = 72.dp))
@@ -417,7 +433,6 @@ fun ProfileSettingsScreen(
         }
     }
 
-    // Dialog Update Channel
     if (showUpdateChannelDialog) {
         AlertDialog(
             onDismissRequest = { showUpdateChannelDialog = false },
@@ -429,10 +444,10 @@ fun ProfileSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { updateChannel = "Stable"; showUpdateChannelDialog = false }
-                            .padding(vertical = 10.dp),
+                            .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = (updateChannel == "Stable"), onClick = { updateChannel = "Stable"; showUpdateChannelDialog = false })
+                        RadioButton(selected = updateChannel == "Stable", onClick = { updateChannel = "Stable"; showUpdateChannelDialog = false })
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Stable (Stabil)", color = Color.White)
                     }
@@ -440,12 +455,12 @@ fun ProfileSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { updateChannel = "Beta"; showUpdateChannelDialog = false }
-                            .padding(vertical = 10.dp),
+                            .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = (updateChannel == "Beta"), onClick = { updateChannel = "Beta"; showUpdateChannelDialog = false })
+                        RadioButton(selected = updateChannel == "Beta", onClick = { updateChannel = "Beta"; showUpdateChannelDialog = false })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Beta (Pratinjau)", color = Color.White)
+                        Text("Beta (Prarilis)", color = Color.White)
                     }
                 }
             },
@@ -457,15 +472,12 @@ fun ProfileSettingsScreen(
         )
     }
 
-    // Dialog Coming Soon
-    if (showComingSoonDialog && comingSoonTitle != null) {
+    if (showComingSoonDialog) {
         AlertDialog(
             onDismissRequest = { showComingSoonDialog = false },
             containerColor = Color(0xFF1C1C1E),
-            title = { Text(comingSoonTitle!!, color = Color.White, fontWeight = FontWeight.Bold) },
-            text = {
-                Text("Fitur $comingSoonTitle akan segera hadir di pembaruan mendatang CloudStream.", color = Color(0xFF9A9AA0))
-            },
+            title = { Text(comingSoonTitle ?: "Fitur", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("Fitur ini sedang dalam pengembangan atau belum tersedia pada versi ini.", color = Color(0xFF9A9AA0)) },
             confirmButton = {
                 TextButton(onClick = { showComingSoonDialog = false }) {
                     Text("OK", color = Color(0xFF2F8CF0))
@@ -478,27 +490,24 @@ fun ProfileSettingsScreen(
 @Composable
 fun SettingsSectionLabel(text: String) {
     Text(
-        text = text,
+        text = text.uppercase(),
         color = Color(0xFF9A9AA0),
         fontSize = 13.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.5.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
     )
 }
 
 @Composable
 fun SettingsCard(content: @Composable () -> Unit) {
     Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = null,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         content()
     }
@@ -519,22 +528,21 @@ fun SettingsRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .background(Color(0xFF0F2540), RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
+        Surface(
+            modifier = Modifier.size(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF0F2540)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color(0xFF2F8CF0),
-                modifier = Modifier.size(28.dp)
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF2F8CF0),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
-
         Spacer(modifier = Modifier.width(16.dp))
-
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -548,18 +556,16 @@ fun SettingsRow(
             Text(
                 text = subtitle,
                 color = Color(0xFF9A9AA0),
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 maxLines = 3
             )
         }
-
         if (trailingText != null) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = trailingText,
                 color = Color(0xFF9A9AA0),
                 fontSize = 14.sp,
-                maxLines = 1,
                 fontWeight = FontWeight.Medium
             )
         }

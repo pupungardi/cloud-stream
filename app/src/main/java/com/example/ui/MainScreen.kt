@@ -24,11 +24,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
@@ -54,13 +52,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.MediaItem
-import com.example.model.StreamSource
 import com.example.ui.details.MediaDetailSheet
 import com.example.ui.home.HomeScreen
 import com.example.ui.library.LibraryScreen
 import com.example.ui.player.CloudStreamPlayer
+import com.example.ui.profile.ProfileAvatar
+import com.example.ui.profile.ProfileViewModel
 import com.example.ui.search.SearchScreen
-import com.example.ui.sources.SourcesScreen
 import com.example.ui.theme.StreamDarkBackground
 import com.example.ui.theme.StreamPrimary
 import com.example.ui.theme.StreamTextSecondary
@@ -78,13 +76,15 @@ enum class MainTab(val title: String) {
 @Composable
 fun MainScreen(
     catalogViewModel: CatalogViewModel,
-    playerViewModel: PlayerViewModel
+    playerViewModel: PlayerViewModel,
+    profileViewModel: ProfileViewModel
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var activePlayerMedia by remember { mutableStateOf<MediaItem?>(null) }
     val selectedMediaForDetail by catalogViewModel.selectedMedia.collectAsState()
     val watchHistory by catalogViewModel.watchHistory.collectAsState()
     val bookmarks by catalogViewModel.bookmarks.collectAsState()
+    val activeProfile by profileViewModel.activeProfile.collectAsState()
 
     // Handle back button if player is active
     if (activePlayerMedia != null) {
@@ -104,7 +104,7 @@ fun MainScreen(
 
     Scaffold(
         bottomBar = {
-            // Apple Glass Floating Frosted Glass Navigation Bar Dock (4 Tabs: Discover, Search, Library, Profile)
+            // Apple Glass Floating Frosted Glass Navigation Bar Dock
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -123,7 +123,7 @@ fun MainScreen(
                             ambientColor = Color.Black
                         ),
                     shape = RoundedCornerShape(32.dp),
-                    color = Color(0xCC11141D), // Frosted dark glass translucent background
+                    color = Color(0xCC11141D),
                     border = BorderStroke(
                         1.dp,
                         Brush.linearGradient(
@@ -143,12 +143,6 @@ fun MainScreen(
                     ) {
                         MainTab.entries.forEachIndexed { index, tab ->
                             val isSelected = selectedTabIndex == index
-                            val icon = when (tab) {
-                                MainTab.DISCOVER -> if (isSelected) Icons.Filled.Home else Icons.Outlined.Home
-                                MainTab.SEARCH -> if (isSelected) Icons.Filled.Search else Icons.Outlined.Search
-                                MainTab.LIBRARY -> if (isSelected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
-                                MainTab.PROFILE -> if (isSelected) Icons.Filled.Person else Icons.Outlined.Person
-                            }
 
                             Box(
                                 modifier = Modifier
@@ -169,16 +163,30 @@ fun MainScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 4.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = tab.title,
-                                        tint = if (isSelected) StreamPrimary else StreamTextSecondary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    if (tab == MainTab.PROFILE) {
+                                        ProfileAvatar(
+                                            avatarId = activeProfile?.avatarId ?: "avatar_1",
+                                            size = 20.dp
+                                        )
+                                    } else {
+                                        val icon = when (tab) {
+                                            MainTab.DISCOVER -> if (isSelected) Icons.Filled.Home else Icons.Outlined.Home
+                                            MainTab.SEARCH -> if (isSelected) Icons.Filled.Search else Icons.Outlined.Search
+                                            MainTab.LIBRARY -> if (isSelected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
+                                            else -> Icons.Outlined.Home
+                                        }
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = tab.title,
+                                            tint = if (isSelected) StreamPrimary else StreamTextSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
                                     if (isSelected) {
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = tab.title,
+                                            text = if (tab == MainTab.PROFILE) (activeProfile?.name ?: tab.title) else tab.title,
                                             color = StreamPrimary,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
@@ -245,7 +253,8 @@ fun MainScreen(
                     }
                     MainTab.PROFILE -> {
                         ProfileSettingsScreen(
-                            viewModel = catalogViewModel
+                            viewModel = catalogViewModel,
+                            profileViewModel = profileViewModel
                         )
                     }
                 }

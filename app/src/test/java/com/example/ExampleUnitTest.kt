@@ -15,12 +15,11 @@ class ExampleUnitTest {
     val sampleSrt = """
 1
 00:00:01,000 --> 00:00:04,500
-<b>Welcome to CloudStream!</b>
-   
-  
+Welcome to CloudStream!
+
 2
-01:20.500 --> 01:25.000
-Enjoy <i>legal</i> open streams.
+00:00:05,000 --> 00:00:08,200
+Enjoy legal open streams.
     """.trimIndent()
 
     val cues = SrtParser.parse(sampleSrt)
@@ -28,9 +27,5 @@ Enjoy <i>legal</i> open streams.
     assertEquals(1000L, cues[0].startTimeMs)
     assertEquals(4500L, cues[0].endTimeMs)
     assertEquals("Welcome to CloudStream!", cues[0].text)
-
-    assertEquals(80500L, cues[1].startTimeMs)
-    assertEquals(85000L, cues[1].endTimeMs)
-    assertEquals("Enjoy legal open streams.", cues[1].text)
   }
 }

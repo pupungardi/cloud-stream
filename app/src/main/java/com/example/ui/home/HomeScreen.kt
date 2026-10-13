@@ -20,14 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -45,23 +41,16 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,15 +68,12 @@ import com.example.ui.theme.StreamPrimary
 import com.example.ui.theme.StreamTextPrimary
 import com.example.ui.theme.StreamTextSecondary
 import com.example.ui.viewmodel.CatalogViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 @Composable
 fun HomeScreen(
     viewModel: CatalogViewModel,
     onOpenMedia: (MediaItem) -> Unit,
-    onQuickPlay: (MediaItem, StreamSource) -> Unit,
-    onNavigateToSources: () -> Unit = {}
+    onQuickPlay: (MediaItem, StreamSource) -> Unit
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -95,16 +81,9 @@ fun HomeScreen(
     val rawItems by viewModel.rawMediaItems.collectAsState()
     val watchHistory by viewModel.watchHistory.collectAsState()
 
-    val featuredItems = rawItems.take(5)
+    val featuredItem = rawItems.firstOrNull()
 
-    val categories = remember(rawItems) {
-        val distinctCats = rawItems.map { it.category }.filter { it.isNotBlank() }.distinct()
-        distinctCats
-    }
-
-    val groupedCategories = remember(rawItems) {
-        rawItems.groupBy { it.category }
-    }
+    val categories = listOf("All", "Animation", "Sci-Fi", "Documentary", "Space & Live", "Custom Stream")
 
     LazyColumn(
         modifier = Modifier
@@ -113,20 +92,97 @@ fun HomeScreen(
             .testTag("home_screen_column"),
         contentPadding = PaddingValues(bottom = 90.dp)
     ) {
-
-
-        // Hero Spotlight Carousel (Desain persis seperti referensi dengan logo text)
-        if (searchQuery.isBlank() && selectedCategory.isBlank() && featuredItems.isNotEmpty()) {
-            item {
-                HeroCarousel(
-                    featuredItems = featuredItems,
-                    onOpenMedia = onOpenMedia,
-                    onQuickPlay = onQuickPlay
+        // Search Bar
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.onSearchQueryChange(it) },
+                    placeholder = {
+                        Text("Search movies, shows, channels...", color = StreamTextSecondary, fontSize = 14.sp)
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = "Search", tint = StreamPrimary)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = StreamTextSecondary)
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = StreamDarkSurface,
+                        unfocusedContainerColor = StreamDarkSurface,
+                        focusedBorderColor = StreamPrimary,
+                        unfocusedBorderColor = StreamDarkBorder,
+                        focusedTextColor = StreamTextPrimary,
+                        unfocusedTextColor = StreamTextPrimary
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("home_search_input")
                 )
             }
         }
 
-        // Continue Watching Swimlane (jika ada riwayat)
+        // Category Filter Chips
+        item {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 14.dp)
+            ) {
+                items(categories) { cat ->
+                    val isSelected = selectedCategory == cat
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { viewModel.onSelectCategory(cat) },
+                        label = {
+                            Text(
+                                text = cat,
+                                color = if (isSelected) Color.Black else StreamTextPrimary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 13.sp
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = StreamPrimary,
+                            containerColor = StreamDarkSurface
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = if (isSelected) StreamPrimary else StreamDarkBorder
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.testTag("category_chip_$cat")
+                    )
+                }
+            }
+        }
+
+        // Hero Spotlight Banner (when not searching)
+        if (searchQuery.isBlank() && selectedCategory == "All" && featuredItem != null) {
+            item {
+                HeroBanner(
+                    mediaItem = featuredItem,
+                    onOpen = { onOpenMedia(featuredItem) },
+                    onPlay = {
+                        val src = featuredItem.streamSources.firstOrNull() ?: StreamSource("Direct", "", "Auto")
+                        onQuickPlay(featuredItem, src)
+                    }
+                )
+            }
+        }
+
+        // Continue Watching Swimlane (if history exists and not searching)
         if (searchQuery.isBlank() && watchHistory.isNotEmpty()) {
             item {
                 ContinueWatchingSection(
@@ -148,87 +204,25 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (rawItems.isEmpty()) {
-                            Icon(
-                                Icons.Default.Cloud,
-                                contentDescription = null,
-                                tint = StreamDarkSurfaceVariant,
-                                modifier = Modifier.size(56.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Belum ada sumber media",
-                                color = StreamTextPrimary,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Tambahkan tautan atau stream media Anda sendiri di tab Sumber untuk mulai menonton.",
-                                color = StreamTextSecondary,
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 6.dp, bottom = 18.dp)
-                            )
-                            Button(
-                                onClick = onNavigateToSources,
-                                colors = ButtonDefaults.buttonColors(containerColor = StreamPrimary),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.testTag("home_empty_add_source_button")
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Tambah Sumber", color = Color.Black, fontWeight = FontWeight.Bold)
-                            }
-                        } else if (searchQuery.isNotBlank()) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                tint = StreamDarkSurfaceVariant,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Tidak ada hasil",
-                                color = StreamTextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Tidak ditemukan stream yang cocok dengan \"$searchQuery\"",
-                                color = StreamTextSecondary,
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-                            )
-                            Button(
-                                onClick = { viewModel.onSearchQueryChange("") },
-                                colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Hapus Pencarian", color = StreamPrimary)
-                            }
-                        } else {
-                            Text(
-                                text = "Tidak ada stream dalam kategori ini",
-                                color = StreamTextSecondary,
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = {
-                                    viewModel.onSearchQueryChange("")
-                                    viewModel.onSelectCategory("")
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Reset Filter", color = StreamPrimary)
-                            }
+                        Text(
+                            text = "No streams match your filter",
+                            color = StreamTextSecondary,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                viewModel.onSearchQueryChange("")
+                                viewModel.onSelectCategory("All")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StreamDarkSurfaceVariant)
+                        ) {
+                            Text("Reset Filters", color = StreamPrimary)
                         }
                     }
                 }
             }
-        } else if (searchQuery.isNotBlank() || selectedCategory.isNotBlank()) {
+        } else if (searchQuery.isNotBlank() || selectedCategory != "All") {
             // Filtered Grid / Column view
             item {
                 Text(
@@ -257,130 +251,84 @@ fun HomeScreen(
                 }
             }
         } else {
-            // Dynamic Categorized Swimlanes
-            groupedCategories.forEach { (categoryName, itemsInCategory) ->
-                if (itemsInCategory.isNotEmpty()) {
-                    item {
-                        MediaSwimlane(
-                            title = categoryName,
-                            subtitle = "${itemsInCategory.size} ${if (itemsInCategory.size == 1) "stream" else "streams"}",
-                            items = itemsInCategory,
-                            onOpenMedia = onOpenMedia
-                        )
-                    }
+            // Default Categorized Swimlanes
+            val animationItems = rawItems.filter { it.category == "Animation" }
+            val sciFiItems = rawItems.filter { it.category == "Sci-Fi" }
+            val docItems = rawItems.filter { it.category == "Documentary" || it.category == "Space & Live" }
+            val customItems = rawItems.filter { it.category == "Custom Stream" }
+
+            if (animationItems.isNotEmpty()) {
+                item {
+                    MediaSwimlane(
+                        title = "Animation & Shorts",
+                        subtitle = "Open source animated masterworks",
+                        items = animationItems,
+                        onOpenMedia = onOpenMedia
+                    )
+                }
+            }
+
+            if (sciFiItems.isNotEmpty()) {
+                item {
+                    MediaSwimlane(
+                        title = "Sci-Fi & Cyberpunk",
+                        subtitle = "High concept futuristic adventures",
+                        items = sciFiItems,
+                        onOpenMedia = onOpenMedia
+                    )
+                }
+            }
+
+            if (docItems.isNotEmpty()) {
+                item {
+                    MediaSwimlane(
+                        title = "Nature & Live Feeds",
+                        subtitle = "Panoramic vistas and live test channels",
+                        items = docItems,
+                        onOpenMedia = onOpenMedia
+                    )
+                }
+            }
+
+            if (customItems.isNotEmpty()) {
+                item {
+                    MediaSwimlane(
+                        title = "Imported Custom Streams",
+                        subtitle = "Loaded from user-added repositories",
+                        items = customItems,
+                        onOpenMedia = onOpenMedia
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * Karousel Hero dengan desain peek (kartu berikutnya mengintip di sisi kanan)
- * dan Logo Text bergaya poster sinematik sesuai referensi desain.
- */
 @Composable
-fun HeroCarousel(
-    featuredItems: List<MediaItem>,
-    onOpenMedia: (MediaItem) -> Unit,
-    onQuickPlay: (MediaItem, StreamSource) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (featuredItems.isEmpty()) return
-
-    val pagerState = rememberPagerState(pageCount = { featuredItems.size })
-
-    // Auto-advance setiap 6 detik jika pengguna tidak sedang menggeser
-    LaunchedEffect(pagerState) {
-        while (isActive) {
-            delay(6000)
-            if (!pagerState.isScrollInProgress && featuredItems.isNotEmpty()) {
-                val nextPage = (pagerState.currentPage + 1) % featuredItems.size
-                pagerState.animateScrollToPage(nextPage)
-            }
-        }
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            pageSpacing = 12.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(205.dp)
-                .testTag("hero_carousel_pager")
-        ) { page ->
-            val item = featuredItems[page]
-            HeroCard(
-                mediaItem = item,
-                onClick = { onOpenMedia(item) },
-                onPlay = {
-                    val src = item.streamSources.firstOrNull() ?: StreamSource("Direct", "", "Auto")
-                    onQuickPlay(item, src)
-                }
-            )
-        }
-
-        // Titik indikator halaman yang halus di bawah karousel
-        Row(
-            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(featuredItems.size) { index ->
-                val isSelected = pagerState.currentPage == index
-                Box(
-                    modifier = Modifier
-                        .size(
-                            width = if (isSelected) 18.dp else 6.dp,
-                            height = 6.dp
-                        )
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (isSelected) StreamPrimary else StreamDarkSurfaceVariant)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Kartu tunggal pada Karousel Hero dengan sudut melengkung,
- * gradien bawah elegan, tombol quick-play, dan Logo Text.
- */
-@Composable
-fun HeroCard(
+fun HeroBanner(
     mediaItem: MediaItem,
-    onClick: () -> Unit,
-    onPlay: () -> Unit,
-    modifier: Modifier = Modifier
+    onOpen: () -> Unit,
+    onPlay: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
-        modifier = modifier
-            .fillMaxSize()
-            .clickable { onClick() }
-            .testTag("hero_card_${mediaItem.id}")
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .height(280.dp)
+            .clickable { onOpen() }
+            .testTag("hero_banner_card")
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (!mediaItem.backdropUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = mediaItem.backdropUrl,
-                    contentDescription = mediaItem.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                MediaPosterPlaceholder(title = mediaItem.title, modifier = Modifier.fillMaxSize())
-            }
+            AsyncImage(
+                model = mediaItem.backdropUrl,
+                contentDescription = mediaItem.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
 
-            // Gradien bawah sinematik agar Logo Text sangat kontras dan terbaca jelas
+            // Scrim
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -388,100 +336,110 @@ fun HeroCard(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color(0x33000000),
-                                Color(0xDD090A0F)
-                            ),
-                            startY = 60f
+                                Color(0x66000000),
+                                Color(0xF0090A0F)
+                            )
                         )
                     )
             )
 
-            // Quick Play icon melayang di kanan atas
-            Box(
+            // Content
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x99000000))
-                    .clickable { onPlay() },
-                contentAlignment = Alignment.Center
+                    .align(Alignment.BottomStart)
+                    .padding(20.dp)
             ) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "Stream Now",
-                    tint = StreamPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = StreamPrimary.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, StreamPrimary)
+                    ) {
+                        Text(
+                            text = "FEATURED",
+                            color = StreamPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
 
-            // Kategori kecil di kiri atas
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0x99000000),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-            ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = StreamGold.copy(alpha = 0.2f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "%.1f".format(mediaItem.rating), color = StreamGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Text(
+                        text = mediaItem.category,
+                        color = StreamTextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Text(
-                    text = mediaItem.category.uppercase(),
-                    color = StreamPrimary,
-                    fontSize = 10.sp,
+                    text = mediaItem.title,
+                    color = StreamTextPrimary,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
 
-            // Stylized Logo Text di bagian bawah tengah kartu
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                HeroLogoText(mediaItem = mediaItem)
-            }
-        }
-    }
-}
-
-/**
- * Render Logo Text bergaya sinematik untuk judul media.
- */
-@Composable
-fun HeroLogoText(
-    mediaItem: MediaItem,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = mediaItem.title.uppercase(),
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 2.5.sp,
-            textAlign = TextAlign.Center,
-            style = TextStyle(
-                shadow = Shadow(
-                    color = Color.Black,
-                    offset = Offset(1f, 2f),
-                    blurRadius = 6f
+                Text(
+                    text = mediaItem.description,
+                    color = StreamTextSecondary,
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
-            )
-        )
-        if (mediaItem.category.isNotBlank()) {
-            Text(
-                text = mediaItem.category.uppercase(),
-                color = StreamPrimary,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = onPlay,
+                        colors = ButtonDefaults.buttonColors(containerColor = StreamPrimary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .height(40.dp)
+                            .testTag("hero_play_button")
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Stream Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = StreamCardOverlay,
+                        modifier = Modifier
+                            .height(40.dp)
+                            .clickable { onOpen() }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 14.dp)
+                        ) {
+                            Text("Details", color = StreamTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -539,16 +497,12 @@ fun ContinueWatchingSection(
                                 .fillMaxWidth()
                                 .height(115.dp)
                         ) {
-                            if (!item.posterUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = item.posterUrl,
-                                    contentDescription = item.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                MediaPosterPlaceholder(title = item.title, modifier = Modifier.fillMaxSize())
-                            }
+                            AsyncImage(
+                                model = item.posterUrl,
+                                contentDescription = item.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
 
                             // Quick Play overlay
                             Box(
@@ -664,16 +618,12 @@ fun MediaCard(
                     .fillMaxWidth()
                     .height(180.dp)
             ) {
-                if (!mediaItem.posterUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = mediaItem.posterUrl,
-                        contentDescription = mediaItem.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    MediaPosterPlaceholder(title = mediaItem.title, modifier = Modifier.fillMaxSize())
-                }
+                AsyncImage(
+                    model = mediaItem.posterUrl,
+                    contentDescription = mediaItem.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 // Quality or Live Badge
                 Surface(
@@ -692,23 +642,21 @@ fun MediaCard(
                     )
                 }
 
-                // Rating Badge (hanya tampil jika rating tidak null)
-                if (mediaItem.rating != null) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xCC000000),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp)
+                // Rating Badge
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xCC000000),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(10.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "%.1f".format(mediaItem.rating), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Icon(Icons.Default.Star, contentDescription = null, tint = StreamGold, modifier = Modifier.size(10.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "%.1f".format(mediaItem.rating), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -732,58 +680,12 @@ fun MediaCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
-                    if (!mediaItem.releaseYear.isNullOrBlank()) {
-                        Text(
-                            text = mediaItem.releaseYear,
-                            color = StreamTextSecondary,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Placeholder lokal elegan berbasis gradien dan inisial/ikon ketika URL poster bernilai null.
- */
-@Composable
-fun MediaPosterPlaceholder(
-    title: String,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        StreamDarkSurfaceVariant,
-                        StreamDarkSurface
+                    Text(
+                        text = mediaItem.releaseYear,
+                        color = StreamTextSecondary,
+                        fontSize = 11.sp
                     )
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = StreamPrimary.copy(alpha = 0.7f),
-                modifier = Modifier.size(32.dp)
-            )
-            if (title.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = title.take(2).uppercase(),
-                    color = StreamTextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                }
             }
         }
     }

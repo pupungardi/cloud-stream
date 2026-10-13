@@ -20,7 +20,7 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    private val _selectedCategory = MutableStateFlow("")
+    private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory = _selectedCategory.asStateFlow()
 
     private val _selectedMedia = MutableStateFlow<MediaItem?>(null)
@@ -65,7 +65,7 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
                 item.description.contains(query, ignoreCase = true) ||
                 item.category.contains(query, ignoreCase = true)
 
-            val matchesCategory = category.isBlank() || item.category.equals(category, ignoreCase = true)
+            val matchesCategory = category == "All" || item.category.equals(category, ignoreCase = true)
 
             matchesQuery && matchesCategory
         }
@@ -80,7 +80,7 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
     }
 
     fun onSelectCategory(category: String) {
-        _selectedCategory.value = if (_selectedCategory.value == category) "" else category
+        _selectedCategory.value = category
     }
 
     fun openMediaDetails(item: MediaItem) {
@@ -130,132 +130,4 @@ class CatalogViewModel(private val repository: MediaRepository) : ViewModel() {
     suspend fun testUrl(url: String): Boolean {
         return repository.testUrlConnectivity(url)
     }
-
-    private val _librarySegment = MutableStateFlow(LibrarySegment.TERSIMPAN)
-    val librarySegment: StateFlow<LibrarySegment> = _librarySegment.asStateFlow()
-
-    private val _libraryViewMode = MutableStateFlow(LibraryViewMode.ROW)
-    val libraryViewMode: StateFlow<LibraryViewMode> = _libraryViewMode.asStateFlow()
-
-    private val _librarySelectedType = MutableStateFlow("All types")
-    val librarySelectedType: StateFlow<String> = _librarySelectedType.asStateFlow()
-
-    private val _librarySortOrder = MutableStateFlow("Recently added")
-    val librarySortOrder: StateFlow<String> = _librarySortOrder.asStateFlow()
-
-    fun setLibrarySegment(segment: LibrarySegment) {
-        _librarySegment.value = segment
-        _librarySelectedType.value = "All types"
-    }
-
-    fun setLibraryViewMode(mode: LibraryViewMode) {
-        _libraryViewMode.value = mode
-    }
-
-    fun setLibrarySelectedType(type: String) {
-        _librarySelectedType.value = type
-    }
-
-    fun setLibrarySortOrder(order: String) {
-        _librarySortOrder.value = order
-    }
-
-    val libraryItems: StateFlow<List<MediaItem>> = combine(
-        rawMediaItems,
-        bookmarks,
-        watchHistory
-    ) { raw, bm, wh ->
-        Triple(raw, bm, wh)
-    }.combine(
-        combine(_librarySegment, _librarySelectedType, _librarySortOrder) { seg, type, sort ->
-            Triple(seg, type, sort)
-        }
-    ) { rawBmWh, segTypeSort ->
-        filterAndSortLibraryItems(
-            rawBmWh.first,
-            rawBmWh.second,
-            rawBmWh.third,
-            segTypeSort.first,
-            segTypeSort.second,
-            segTypeSort.third
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val libraryGroupedItems: StateFlow<Map<String, List<MediaItem>>> = libraryItems.combine(
-        _libraryViewMode
-    ) { items, _ ->
-        groupLibraryItemsByType(items)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyMap()
-    )
-
-    val libraryAvailableTypes: StateFlow<List<String>> = combine(
-        rawMediaItems,
-        bookmarks,
-        watchHistory,
-        _librarySegment
-    ) { raw, bm, wh, seg ->
-        val base = filterAndSortLibraryItems(raw, bm, wh, seg, "All types", "Recently added")
-        val types = base.map { it.category.ifBlank { "Other" } }.distinct()
-        listOf("All types") + types
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        listOf("All types")
-    )
 }
-
-enum class LibrarySegment {
-    TERSIMPAN, CLOUD
-}
-
-enum class LibraryViewMode {
-    ROW, GRID
-}
-
-fun filterAndSortLibraryItems(
-    rawItems: List<MediaItem>,
-    bookmarks: List<BookmarkEntity>,
-    watchHistory: List<WatchHistoryEntity>,
-    segment: LibrarySegment,
-    selectedType: String,
-    sortOrder: String
-): List<MediaItem> {
-    val baseItems = when (segment) {
-        LibrarySegment.TERSIMPAN -> {
-            val bookmarkIds = bookmarks.map { it.mediaId }.toSet()
-            val historyIds = watchHistory.map { it.mediaId }.toSet()
-            rawItems.filter { it.id in bookmarkIds || it.id in historyIds }
-        }
-        LibrarySegment.CLOUD -> {
-            rawItems
-        }
-    }
-
-    val filtered = if (selectedType == "All types" || selectedType.isBlank()) {
-        baseItems
-    } else {
-        baseItems.filter { it.category.equals(selectedType, ignoreCase = true) }
-    }
-
-    val historyMap = watchHistory.associateBy { it.mediaId }
-
-    return when (sortOrder) {
-        "Title A-Z" -> filtered.sortedBy { it.title }
-        "Title Z-A" -> filtered.sortedByDescending { it.title }
-        "Year (terbaru)" -> filtered.sortedByDescending { it.releaseYear?.toIntOrNull() ?: 0 }
-        "Recently watched" -> filtered.sortedByDescending { historyMap[it.id]?.updatedAt ?: 0L }
-        else -> filtered
-    }
-}
-
-fun groupLibraryItemsByType(items: List<MediaItem>): Map<String, List<MediaItem>> {
-    return items.groupBy { it.category.ifBlank { "Other" } }
-}
-

@@ -8,15 +8,13 @@ object SrtParser {
         if (content.isBlank()) return emptyList()
 
         val cues = mutableListOf<SubtitleCue>()
-        // Pecah blok dengan regex \n\s*\n agar baris kosong berisi spasi atau baris kosong ganda tidak merusak parsing
-        val normalized = content.replace("\r\n", "\n").replace("\r", "\n")
-        val blocks = normalized.split(Regex("\n\\s*\n"))
+        val blocks = content.replace("\r\n", "\n").replace("\r", "\n").split("\n\n")
 
         for (block in blocks) {
             val lines = block.lines().map { it.trim() }.filter { it.isNotEmpty() }
             if (lines.isEmpty()) continue
 
-            // Temukan baris yang mengandung penunjuk waktu "-->"
+            // Find the line containing "-->"
             val arrowIndex = lines.indexOfFirst { it.contains("-->") }
             if (arrowIndex == -1) continue
 
@@ -25,12 +23,11 @@ object SrtParser {
             if (timeParts.size < 2) continue
 
             val startTime = parseTimestamp(timeParts[0])
-            val endTime = parseTimestamp(timeParts[1].split(Regex("\\s+")).firstOrNull() ?: timeParts[1])
+            val endTime = parseTimestamp(timeParts[1].split(" ").firstOrNull() ?: timeParts[1])
 
             if (startTime >= 0 && endTime >= startTime) {
                 val textLines = lines.subList(arrowIndex + 1, lines.size)
-                // Hapus tag HTML seperti <b>, <i>, <font>, dll
-                val text = textLines.joinToString("\n").replace(Regex("<[^>]*>"), "").trim()
+                val text = textLines.joinToString("\n").replace(Regex("<[^>]*>"), "")
                 if (text.isNotBlank()) {
                     cues.add(SubtitleCue(startTime, endTime, text))
                 }
@@ -42,28 +39,22 @@ object SrtParser {
 
     private fun parseTimestamp(timeStr: String): Long {
         try {
-            val clean = timeStr.trim().replace(',', '.')
+            val clean = timeStr.replace(',', '.')
             val parts = clean.split(":")
             return when (parts.size) {
                 3 -> {
-                    // Format: HH:MM:SS.mmm atau HH:MM:SS,mmm
-                    val hours = parts[0].trim().toLong()
-                    val minutes = parts[1].trim().toLong()
-                    val secParts = parts[2].trim().split(".")
-                    val seconds = secParts[0].trim().toLong()
-                    val millis = if (secParts.size > 1) {
-                        secParts[1].trim().take(3).padEnd(3, '0').toLong()
-                    } else 0L
+                    val hours = parts[0].toLong()
+                    val minutes = parts[1].toLong()
+                    val secParts = parts[2].split(".")
+                    val seconds = secParts[0].toLong()
+                    val millis = if (secParts.size > 1) secParts[1].padEnd(3, '0').take(3).toLong() else 0L
                     (hours * 3600 + minutes * 60 + seconds) * 1000 + millis
                 }
                 2 -> {
-                    // Format: MM:SS.mmm atau MM:SS,mmm
-                    val minutes = parts[0].trim().toLong()
-                    val secParts = parts[1].trim().split(".")
-                    val seconds = secParts[0].trim().toLong()
-                    val millis = if (secParts.size > 1) {
-                        secParts[1].trim().take(3).padEnd(3, '0').toLong()
-                    } else 0L
+                    val minutes = parts[0].toLong()
+                    val secParts = parts[1].split(".")
+                    val seconds = secParts[0].toLong()
+                    val millis = if (secParts.size > 1) secParts[1].padEnd(3, '0').take(3).toLong() else 0L
                     (minutes * 60 + seconds) * 1000 + millis
                 }
                 else -> -1L

@@ -222,21 +222,13 @@ fun SourcesScreen(
                         // Test URL button
                         OutlinedButton(
                             onClick = {
-                                val trimmed = sourceUrl.trim()
-                                if (trimmed.isBlank()) {
-                                    errorMessage = "Silakan masukkan URL sumber stream."
-                                    return@OutlinedButton
-                                }
-                                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-                                    errorMessage = "URL harus diawali dengan http:// atau https://"
-                                    urlTestResult = null
+                                if (sourceUrl.isBlank()) {
+                                    errorMessage = "Please enter a stream URL first."
                                     return@OutlinedButton
                                 }
                                 isCheckingUrl = true
-                                errorMessage = null
-                                urlTestResult = null
                                 scope.launch {
-                                    val isOk = viewModel.testUrl(trimmed)
+                                    val isOk = viewModel.testUrl(sourceUrl.trim())
                                     urlTestResult = isOk
                                     isCheckingUrl = false
                                 }
@@ -260,19 +252,13 @@ fun SourcesScreen(
                         // Add Source button
                         Button(
                             onClick = {
-                                val trimmed = sourceUrl.trim()
-                                if (trimmed.isBlank()) {
-                                    errorMessage = "Silakan masukkan URL sumber stream."
-                                    return@Button
-                                }
-                                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-                                    errorMessage = "URL harus diawali dengan http:// atau https://"
+                                if (sourceUrl.isBlank()) {
+                                    errorMessage = "Please enter a stream URL."
                                     return@Button
                                 }
                                 val name = if (sourceName.isBlank()) "Stream Source #${customSources.size + 1}" else sourceName.trim()
-                                val isHls = trimmed.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
-                                val type = if (isHls) "HLS" else "DIRECT"
-                                viewModel.addCustomSource(name, trimmed, type)
+                                val type = if (sourceUrl.contains(".m3u8", ignoreCase = true)) "HLS" else "DIRECT"
+                                viewModel.addCustomSource(name, sourceUrl.trim(), type)
                                 sourceName = ""
                                 sourceUrl = ""
                                 urlTestResult = null
@@ -292,15 +278,146 @@ fun SourcesScreen(
             }
         }
 
-        // Active Sources List
+        // Quick Preset Channels
+        item {
+            Column(modifier = Modifier.padding(bottom = 20.dp)) {
+                Text(
+                    text = "Quick Stream Presets",
+                    color = StreamTextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+
+                val presets = listOf(
+                    Triple("Apple HLS BipBop Test", "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8", "HLS"),
+                    Triple("Unified Streaming Demo", "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8", "HLS"),
+                    Triple("Mux Adaptive CDN Feed", "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", "HLS")
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presets.forEach { (name, url, type) ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = StreamDarkSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, StreamDarkBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = name,
+                                    color = StreamTextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = type,
+                                    color = StreamPrimary,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.addCustomSource(name, url, type)
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Icon(Icons.Default.CloudDownload, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("+ Import", color = StreamPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Active Repositories List
         item {
             Text(
-                text = "Active Catalog Sources (${customSources.size})",
+                text = "Active Catalog Repositories (${customSources.size + 1})",
                 color = StreamTextPrimary,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
+        }
+
+        // Built-in Default Repository
+        item {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = StreamDarkSurface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, StreamPrimary.copy(alpha = 0.4f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(StreamPrimary.copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Stream, contentDescription = null, tint = StreamPrimary, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Curated Open Media Hub",
+                                color = StreamTextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = StreamPrimary.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "OFFICIAL",
+                                    color = StreamPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Blender Open Movies, Sintel, Tears of Steel, Wild Horizons",
+                            color = StreamTextSecondary,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0x3322C55E)
+                    ) {
+                        Text(
+                            text = "Active",
+                            color = Color(0xFF22C55E),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
         }
 
         // Custom Sources List
@@ -323,7 +440,7 @@ fun SourcesScreen(
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "Use the form above to add your custom streaming feeds or URLs",
+                            text = "Use the form above or pick a quick preset to add custom feeds",
                             color = StreamTextSecondary,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 4.dp)

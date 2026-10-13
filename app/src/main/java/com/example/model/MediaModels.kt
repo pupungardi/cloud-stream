@@ -3,26 +3,24 @@ package com.example.model
 data class MediaItem(
     val id: String,
     val title: String,
-    val description: String = "",
-    val category: String = "Video",
-    val posterUrl: String? = null,
-    val backdropUrl: String? = null,
-    val durationText: String = "",
-    val durationMs: Long = 0L,
-    val releaseYear: String? = null,
-    val rating: Float? = null,
+    val description: String,
+    val category: String,
+    val posterUrl: String,
+    val backdropUrl: String,
+    val durationText: String,
+    val durationMs: Long,
+    val releaseYear: String,
+    val rating: Float,
     val streamSources: List<StreamSource>,
     val subtitles: List<SubtitleTrack> = emptyList(),
-    val sourceRepo: String = "",
-    val isLive: Boolean = false,
-    val logoStyle: String? = null,
-    val logoSubtitle: String? = null
+    val sourceRepo: String = "Curated Open Media",
+    val isLive: Boolean = false
 )
 
 data class StreamSource(
-    val label: String,       // e.g. "Direct Video", "HLS Stream"
+    val label: String,       // e.g. "1080p FHD", "720p HD", "480p SD", "HLS Stream"
     val url: String,
-    val quality: String = "Auto",
+    val quality: String,     // "1080p", "720p", "480p", "Auto"
     val isDirect: Boolean = true
 )
 

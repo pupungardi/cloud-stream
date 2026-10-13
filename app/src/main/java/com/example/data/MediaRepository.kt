@@ -7,69 +7,47 @@ import com.example.data.local.WatchHistoryEntity
 import com.example.model.MediaItem
 import com.example.model.StreamSource
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URL
 import java.util.UUID
 
-class MediaRepository(private val database: AppDatabase, private val profileRepository: ProfileRepository? = null) {
+class MediaRepository(private val database: AppDatabase) {
 
     private val watchHistoryDao = database.watchHistoryDao()
     private val bookmarkDao = database.bookmarkDao()
     private val customSourceDao = database.customSourceDao()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val activeProfileIdFlow: Flow<Long> = profileRepository?.activeProfileId ?: flowOf(1L)
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val watchHistory: Flow<List<WatchHistoryEntity>> = activeProfileIdFlow
-        .flatMapLatest { profileId ->
-            watchHistoryDao.getAllHistory(profileId)
-        }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val bookmarks: Flow<List<BookmarkEntity>> = activeProfileIdFlow
-        .flatMapLatest { profileId ->
-            bookmarkDao.getAllBookmarks(profileId)
-        }
-
+    val watchHistory: Flow<List<WatchHistoryEntity>> = watchHistoryDao.getAllHistory()
+    val bookmarks: Flow<List<BookmarkEntity>> = bookmarkDao.getAllBookmarks()
     val customSources: Flow<List<CustomSourceEntity>> = customSourceDao.getAllSources()
 
-    private fun getActiveProfileId(): Long {
-        return profileRepository?.activeProfileId?.value ?: 1L
-    }
-
     fun getAllMediaItems(): Flow<List<MediaItem>> {
-        return customSources.map { sources ->
-            val allList = mutableListOf<MediaItem>()
+        return customSources.combine(watchHistory) { sources, _ ->
+            val allList = CuratedMediaCatalog.items.toMutableList()
 
+            // Convert active custom sources into playable media items
             sources.filter { it.isEnabled }.forEach { source ->
                 val sourceId = "custom-${source.id}"
-                val isHls = isHlsUrl(source.url)
-                val categoryName = if (isHls) "HLS Stream" else "Direct Video"
-
+                val isHls = source.url.endsWith(".m3u8", ignoreCase = true)
                 allList.add(
                     MediaItem(
                         id = sourceId,
                         title = source.name,
-                        description = source.url,
-                        category = categoryName,
-                        posterUrl = null,
-                        backdropUrl = null,
+                        description = "Imported custom stream from repository source: ${source.url}",
+                        category = if (isHls) "Space & Live" else "Custom Stream",
+                        posterUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80",
+                        backdropUrl = "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&auto=format&fit=crop&q=80",
                         durationText = if (isHls) "LIVE" else "Stream",
                         durationMs = 0L,
-                        releaseYear = null,
-                        rating = null,
+                        releaseYear = "Custom",
+                        rating = 9.0f,
                         isLive = isHls,
                         streamSources = listOf(
                             StreamSource(
-                                label = if (isHls) "HLS Live Stream" else "Direct Stream",
+                                label = if (isHls) "HLS Live Stream" else "Direct Video Feed",
                                 url = source.url,
                                 quality = "Auto"
                             )
@@ -82,19 +60,8 @@ class MediaRepository(private val database: AppDatabase, private val profileRepo
         }
     }
 
-    private fun isHlsUrl(rawUrl: String): Boolean {
-        return try {
-            val uri = URI(rawUrl)
-            val path = uri.path ?: ""
-            path.endsWith(".m3u8", ignoreCase = true)
-        } catch (_: Exception) {
-            rawUrl.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
-        }
-    }
-
     suspend fun getWatchHistoryItem(mediaId: String): WatchHistoryEntity? {
-        val profileId = getActiveProfileId()
-        return watchHistoryDao.getHistory(mediaId, profileId)
+        return watchHistoryDao.getHistory(mediaId)
     }
 
     suspend fun saveWatchProgress(
@@ -106,10 +73,8 @@ class MediaRepository(private val database: AppDatabase, private val profileRepo
         durationMs: Long,
         category: String = ""
     ) {
-        val profileId = getActiveProfileId()
         val entity = WatchHistoryEntity(
             mediaId = mediaId,
-            profileId = profileId,
             title = title,
             posterUrl = posterUrl,
             streamUrl = streamUrl,
@@ -122,36 +87,29 @@ class MediaRepository(private val database: AppDatabase, private val profileRepo
     }
 
     suspend fun deleteWatchHistory(mediaId: String) {
-        val profileId = getActiveProfileId()
-        watchHistoryDao.deleteHistory(mediaId, profileId)
+        watchHistoryDao.deleteHistory(mediaId)
     }
 
     suspend fun clearWatchHistory() {
-        val profileId = getActiveProfileId()
-        watchHistoryDao.clearHistoryForProfile(profileId)
+        watchHistoryDao.clearAllHistory()
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     fun isBookmarked(mediaId: String): Flow<Boolean> {
-        return activeProfileIdFlow.flatMapLatest { profileId ->
-            bookmarkDao.isBookmarked(mediaId, profileId)
-        }
+        return bookmarkDao.isBookmarked(mediaId)
     }
 
     suspend fun toggleBookmark(mediaItem: MediaItem, isCurrentlyBookmarked: Boolean) {
-        val profileId = getActiveProfileId()
         if (isCurrentlyBookmarked) {
-            bookmarkDao.deleteBookmark(mediaItem.id, profileId)
+            bookmarkDao.deleteBookmark(mediaItem.id)
         } else {
             val entity = BookmarkEntity(
                 mediaId = mediaItem.id,
-                profileId = profileId,
                 title = mediaItem.title,
                 category = mediaItem.category,
-                posterUrl = mediaItem.posterUrl ?: "",
+                posterUrl = mediaItem.posterUrl,
                 streamUrl = mediaItem.streamSources.firstOrNull()?.url ?: "",
                 durationText = mediaItem.durationText,
-                rating = mediaItem.rating ?: 0f,
+                rating = mediaItem.rating,
                 addedAt = System.currentTimeMillis()
             )
             bookmarkDao.insertBookmark(entity)
@@ -179,73 +137,29 @@ class MediaRepository(private val database: AppDatabase, private val profileRepo
     }
 
     suspend fun testUrlConnectivity(streamUrl: String): Boolean = withContext(Dispatchers.IO) {
-        var currentUrl = streamUrl
-        var redirects = 0
-        while (redirects < 5) {
-            var connection: HttpURLConnection? = null
+        try {
+            val url = URL(streamUrl)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "HEAD"
+            connection.connectTimeout = 4000
+            connection.readTimeout = 4000
+            connection.instanceFollowRedirects = true
+            val responseCode = connection.responseCode
+            responseCode in 200..399
+        } catch (_: Exception) {
+            // Some streaming CDNs reject HEAD requests; fallback to GET with short range
             try {
-                val url = URL(currentUrl)
-                connection = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "HEAD"
-                    connectTimeout = 4000
-                    readTimeout = 4000
-                    instanceFollowRedirects = false
-                }
+                val url = URL(streamUrl)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("Range", "bytes=0-1024")
+                connection.connectTimeout = 4000
+                connection.readTimeout = 4000
                 val code = connection.responseCode
-                if (code in 200..299 || code == 206) {
-                    return@withContext true
-                } else if (code in 300..399) {
-                    val location = connection.getHeaderField("Location") ?: break
-                    currentUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
-                        location
-                    } else {
-                        URL(url, location).toString()
-                    }
-                    redirects++
-                } else {
-                    break
-                }
+                code in 200..399
             } catch (_: Exception) {
-                break
-            } finally {
-                connection?.disconnect()
+                false
             }
         }
-
-        currentUrl = streamUrl
-        redirects = 0
-        while (redirects < 5) {
-            var connection: HttpURLConnection? = null
-            try {
-                val url = URL(currentUrl)
-                connection = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    setRequestProperty("Range", "bytes=0-1024")
-                    connectTimeout = 4000
-                    readTimeout = 4000
-                    instanceFollowRedirects = false
-                }
-                val code = connection.responseCode
-                if (code in 200..299 || code == 206) {
-                    return@withContext true
-                } else if (code in 300..399) {
-                    val location = connection.getHeaderField("Location") ?: return@withContext false
-                    currentUrl = if (location.startsWith("http://") || location.startsWith("https://")) {
-                        location
-                    } else {
-                        URL(url, location).toString()
-                    }
-                    redirects++
-                } else {
-                    return@withContext false
-                }
-            } catch (_: Exception) {
-                return@withContext false
-            } finally {
-                connection?.disconnect()
-            }
-        }
-
-        false
     }
 }
